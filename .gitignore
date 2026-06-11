@@ -1,0 +1,93 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+[Aa]rtifacts/
+[Dd]ebug*/
+[Rr]elease*/
+x64/
+x86/
+ARM/
+ARM64/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.VC.db
+*.VC.VC.opendb
+
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+
+# JetBrains Rider / ReSharper
+.idea/
+*.sln.iml
+_ReSharper*/
+*.DotSettings.user
+
+# Test results and coverage
+[Tt]est[Rr]esult*/
+[Tt]est[Rr]esults/
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+*.trx
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+
+# .NET tooling
+.store/
+.dotnet/
+.ionide/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Publish output
+[Pp]ublish/
+*.Publish.xml
+*.pubxml
+*.pubxml.user
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.*.local.json
+secrets.json
+
+# Generated files
+Generated/
+*.g.cs
+*.g.i.cs
+*.generated.cs
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
