@@ -18,6 +18,8 @@ LexVerse/
 │   ├── LexVerse.OCR.Tests/
 │   └── LexVerse.Translation.Tests/
 │
+├── samples/
+│
 ├── docs/
 │
 ├── assets/
@@ -110,7 +112,8 @@ Module này không tự OCR và không tự dịch.
 ---
 
 ### `tests/`
-Chứa code test.
+Chứa code test tự động.
+Tức là code sẽ tự động được test sau khi build
 
 Dùng để:
 - Test logic trong `Core`.
@@ -118,6 +121,15 @@ Dùng để:
 - Test xử lý Translation giả lập.
 
 Không test trực tiếp UI nặng nếu chưa cần.
+
+---
+
+### `samples/`
+Chứa code test.
+Test những thứ cần chạy thật,
+
+Ví dụ:
+    chạy in chữ ra Overlay để xem in ra có đúng không (cái này test tự động thì sao mà biết đúng sai)
 
 ---
 
