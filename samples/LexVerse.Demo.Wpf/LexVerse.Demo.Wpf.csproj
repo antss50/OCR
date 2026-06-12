@@ -9,9 +9,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\LexVerse.Core\LexVerse.Core.csproj" />
-    <ProjectReference Include="..\LexVerse.Infrastructure\LexVerse.Infrastructure.csproj" />
-    <ProjectReference Include="..\LexVerse.OCR\LexVerse.OCR.csproj" />
+    <ProjectReference Include="..\..\src\LexVerse.Core\LexVerse.Core.csproj" />
+    <ProjectReference Include="..\..\src\LexVerse.Infrastructure\LexVerse.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\LexVerse.OCR\LexVerse.OCR.csproj" />
   </ItemGroup>
 
 </Project>
