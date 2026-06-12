@@ -1,5 +1,8 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/LexVerse.App/LexVerse.App.csproj" />
+    <Project Path="src/LexVerse.Core/LexVerse.Core.csproj" />
+    <Project Path="src/LexVerse.Infrastructure/LexVerse.Infrastructure.csproj" />
+    <Project Path="src/LexVerse.OCR/LexVerse.OCR.csproj" />
   </Folder>
 </Solution>
