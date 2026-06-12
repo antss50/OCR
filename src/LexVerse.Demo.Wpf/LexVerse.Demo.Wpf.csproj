@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LexVerse.Core\LexVerse.Core.csproj" />
+    <ProjectReference Include="..\LexVerse.Infrastructure\LexVerse.Infrastructure.csproj" />
+    <ProjectReference Include="..\LexVerse.OCR\LexVerse.OCR.csproj" />
+  </ItemGroup>
+
+</Project>
