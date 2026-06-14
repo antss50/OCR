@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/LexVerse.App/LexVerse.App.csproj" />
+    <Project Path="src/LexVerse.Overlay/LexVerse.Overlay.csproj" />
   </Folder>
 </Solution>
