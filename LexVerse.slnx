@@ -8,4 +8,7 @@
     <Project Path="src/LexVerse.Infrastructure/LexVerse.Infrastructure.csproj" />
     <Project Path="src/LexVerse.OCR/LexVerse.OCR.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj" />
+  </Folder>
 </Solution>

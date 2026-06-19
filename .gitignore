@@ -72,6 +72,7 @@ artifacts/
 appsettings.Local.json
 appsettings.*.local.json
 secrets.json
+lexverse-*.json
 
 # Generated files
 Generated/
