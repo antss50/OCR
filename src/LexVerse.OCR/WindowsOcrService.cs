@@ -4,7 +4,6 @@ using Windows.Globalization;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
 using Windows.Security.Cryptography;
-using CoreOcrWord = LexVerse.Core.Ocr.OcrWord;
 
 namespace LexVerse.OCR;
 
@@ -13,7 +12,6 @@ public sealed class WindowsOcrService : IOcrService
     private const string DefaultLanguageTag = "en-US";
 
     private readonly OcrEngine _engine;
-    private readonly OcrTextBlockLayoutGrouper _layoutGrouper = new();
 
     public WindowsOcrService(string? languageTag = null)
     {
@@ -46,14 +44,10 @@ public sealed class WindowsOcrService : IOcrService
         var result = await _engine.RecognizeAsync(bitmap);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var recognizedWords = result.Lines
-            .SelectMany(line => line.Words)
-            .Select(ToWord)
-            .ToArray();
-        var lineBlocks = BuildVisualTextBlocks(recognizedWords)
+        var blocks = result.Lines
+            .Select(ToTextBlock)
             .Where(block => EnglishOcrTextFilter.IsLikelyEnglish(block.Text))
             .ToArray();
-        var blocks = _layoutGrouper.GroupLines(lineBlocks);
 
         return new LexVerse.Core.Ocr.OcrResult(
             blocks,
@@ -84,132 +78,17 @@ public sealed class WindowsOcrService : IOcrService
         throw new InvalidOperationException($"{DefaultLanguageTag} OCR is not installed or supported on this Windows profile.");
     }
 
-    private static CoreOcrWord ToWord(Windows.Media.Ocr.OcrWord word)
+    private static OcrTextBlock ToTextBlock(OcrLine line)
     {
-        var bounds = ToBoundingBox(word.BoundingRect);
-        return new CoreOcrWord(word.Text, bounds, bounds.Height);
-    }
-
-    private static IReadOnlyList<OcrTextBlock> BuildVisualTextBlocks(IReadOnlyList<CoreOcrWord> words)
-    {
-        if (words.Count == 0)
-        {
-            return [];
-        }
-
-        var medianWordHeight = Median(words.Select(word => word.FontSize));
-        var rowTolerance = Math.Max(5, medianWordHeight * 0.55);
-        var rows = new List<VisualRow>();
-
-        foreach (var word in words.OrderBy(word => CenterY(word.Bounds)).ThenBy(word => word.Bounds.X))
-        {
-            var matchingRow = rows
-                .Where(row => Math.Abs(row.CenterY - CenterY(word.Bounds)) <= rowTolerance ||
-                    VerticalOverlapRatio(row.Top, row.Bottom, word.Bounds.Y, word.Bounds.Bottom) >= 0.45)
-                .OrderBy(row => Math.Abs(row.CenterY - CenterY(word.Bounds)))
-                .FirstOrDefault();
-
-            if (matchingRow is null)
-            {
-                rows.Add(new VisualRow(word));
-                continue;
-            }
-
-            matchingRow.Add(word);
-        }
-
-        return rows
-            .OrderBy(row => row.Top)
-            .ThenBy(row => row.Left)
-            .SelectMany(row => SplitRowIntoVisualLines(row.Words, medianWordHeight))
-            .Select(ToTextBlock)
+        var words = line.Words
+            .Select(word => new LexVerse.Core.Ocr.OcrWord(word.Text, ToBoundingBox(word.BoundingRect)))
             .ToArray();
-    }
 
-    private static IReadOnlyList<IReadOnlyList<CoreOcrWord>> SplitRowIntoVisualLines(
-        IReadOnlyList<CoreOcrWord> words,
-        double medianWordHeight)
-    {
-        if (words.Count <= 1)
-        {
-            return [words];
-        }
-
-        var orderedWords = words
-            .OrderBy(word => word.Bounds.X)
-            .ThenBy(word => word.Bounds.Y)
-            .ToArray();
-        var gaps = orderedWords
-            .Zip(orderedWords.Skip(1), (left, right) => right.Bounds.X - left.Bounds.Right)
-            .Where(gap => gap > 0)
-            .Select(gap => (double)gap)
-            .ToArray();
-        var medianGap = Median(gaps);
-        var columnGapThreshold = Math.Max(28, Math.Max(medianWordHeight * 1.15, medianGap * 1.8));
-        var visualLines = new List<IReadOnlyList<CoreOcrWord>>();
-        var currentLine = new List<CoreOcrWord> { orderedWords[0] };
-
-        for (var index = 1; index < orderedWords.Length; index++)
-        {
-            var previousWord = orderedWords[index - 1];
-            var currentWord = orderedWords[index];
-            var gap = currentWord.Bounds.X - previousWord.Bounds.Right;
-
-            if (gap > columnGapThreshold && HasEnoughWordsAfterSplit(currentLine, orderedWords, index))
-            {
-                visualLines.Add(currentLine.ToArray());
-                currentLine.Clear();
-            }
-
-            currentLine.Add(currentWord);
-        }
-
-        if (currentLine.Count > 0)
-        {
-            visualLines.Add(currentLine.ToArray());
-        }
-
-        return visualLines;
-    }
-
-    private static bool HasEnoughWordsAfterSplit(
-        IReadOnlyList<CoreOcrWord> currentLine,
-        IReadOnlyList<CoreOcrWord> orderedWords,
-        int splitIndex)
-    {
-        return currentLine.Count >= 1 && orderedWords.Count - splitIndex >= 1;
-    }
-
-    private static OcrTextBlock ToTextBlock(IReadOnlyList<CoreOcrWord> words)
-    {
-        var bounds = words.Count == 0
+        var bounds = words.Length == 0
             ? new BoundingBox(0, 0, 0, 0)
             : words.Select(word => word.Bounds).Aggregate(BoundingBox.Union);
-        var fontSize = words.Count == 0
-            ? 0
-            : Median(words.Select(word => word.FontSize));
-        var text = string.Join(' ', words.Select(word => word.Text));
 
-        return new OcrTextBlock(text, bounds, words, fontSize);
-    }
-
-    private static double CenterY(BoundingBox bounds)
-    {
-        return bounds.Y + bounds.Height / 2.0;
-    }
-
-    private static double VerticalOverlapRatio(int topA, int bottomA, int topB, int bottomB)
-    {
-        var overlap = Math.Min(bottomA, bottomB) - Math.Max(topA, topB);
-        if (overlap <= 0)
-        {
-            return 0;
-        }
-
-        var smallerHeight = Math.Min(bottomA - topA, bottomB - topB);
-        return smallerHeight <= 0
-            ? 0
-            : overlap / (double)smallerHeight;
+        return new OcrTextBlock(line.Text, bounds, words);
     }
 
     private static BoundingBox ToBoundingBox(Windows.Foundation.Rect rect)
@@ -219,58 +98,6 @@ public sealed class WindowsOcrService : IOcrService
             (int)Math.Round(rect.Y),
             (int)Math.Round(rect.Width),
             (int)Math.Round(rect.Height));
-    }
-
-    private static double Median(IEnumerable<double> values)
-    {
-        var sorted = values.Where(value => value > 0).Order().ToArray();
-        if (sorted.Length == 0)
-        {
-            return 0;
-        }
-
-        var middle = sorted.Length / 2;
-        return sorted.Length % 2 == 0
-            ? (sorted[middle - 1] + sorted[middle]) / 2
-            : sorted[middle];
-    }
-
-    private sealed class VisualRow
-    {
-        private readonly List<CoreOcrWord> _words = [];
-
-        public VisualRow(CoreOcrWord firstWord)
-        {
-            Add(firstWord);
-        }
-
-        public int Left { get; private set; }
-
-        public int Top { get; private set; }
-
-        public int Bottom { get; private set; }
-
-        public double CenterY => Top + (Bottom - Top) / 2.0;
-
-        public IReadOnlyList<CoreOcrWord> Words => _words;
-
-        public void Add(CoreOcrWord word)
-        {
-            if (_words.Count == 0)
-            {
-                Left = word.Bounds.X;
-                Top = word.Bounds.Y;
-                Bottom = word.Bounds.Bottom;
-            }
-            else
-            {
-                Left = Math.Min(Left, word.Bounds.X);
-                Top = Math.Min(Top, word.Bounds.Y);
-                Bottom = Math.Max(Bottom, word.Bounds.Bottom);
-            }
-
-            _words.Add(word);
-        }
     }
 }
 
