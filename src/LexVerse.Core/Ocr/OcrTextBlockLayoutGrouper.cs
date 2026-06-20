@@ -7,6 +7,7 @@ public sealed class OcrTextBlockLayoutGrouper
 {
     private const double IndentFactor = 1.6;
     private const double MergeScoreThreshold = 0.74;
+    private const double MinimumHorizontalSplitGap = 22;
     private static readonly Regex BulletOrNumberedItemRegex = new("^\\s*(?:[\\u2022\\-*]|[0-9]+[.)])\\s+", RegexOptions.Compiled);
     private static readonly Regex DashSeparatedListItemRegex = new("^\\s*\\S+(?:\\s+\\S+){0,4}\\s+(?:[-\\u2013\\u2014])\\s+\\S+", RegexOptions.Compiled);
 
@@ -17,7 +18,11 @@ public sealed class OcrTextBlockLayoutGrouper
         var rawLines = lineBlocks
             .Where(line => !string.IsNullOrWhiteSpace(line.Text) && line.Bounds.Width > 0 && line.Bounds.Height > 0)
             .ToArray();
-        var lines = SplitLinesByDetectedColumnBands(rawLines)
+        var proximityLines = rawLines
+            .SelectMany(SplitLineByHorizontalProximity)
+            .ToArray();
+        var gutters = DetectRepeatedVerticalGutters(proximityLines);
+        var lines = SplitLinesByGutters(proximityLines, gutters)
             .SelectMany(SplitLineByHorizontalProximity)
             .ToArray();
 
@@ -27,7 +32,7 @@ public sealed class OcrTextBlockLayoutGrouper
         }
 
         var medianLineHeight = Median(lines.Select(line => (double)line.Bounds.Height));
-        var columns = BuildColumns(lines);
+        var columns = BuildColumns(lines, gutters);
         var grouped = new List<OcrTextBlock>();
 
         foreach (var column in columns.OrderBy(column => column.Left))
@@ -38,24 +43,16 @@ public sealed class OcrTextBlockLayoutGrouper
         return grouped;
     }
 
-    private static IEnumerable<OcrTextBlock> SplitLinesByDetectedColumnBands(IReadOnlyList<OcrTextBlock> lines)
+    private static IEnumerable<OcrTextBlock> SplitLinesByGutters(
+        IReadOnlyList<OcrTextBlock> lines,
+        IReadOnlyList<DetectedGutter> gutters)
     {
-        var words = lines
-            .SelectMany(line => line.Words)
-            .Where(word => word.Bounds.Width > 0 && word.Bounds.Height > 0)
-            .ToArray();
-
-        if (words.Length < 12)
+        if (gutters.Count == 0)
         {
             return lines;
         }
 
-        var bands = DetectColumnBands(words);
-        if (bands.Length <= 1)
-        {
-            return lines;
-        }
-
+        var bands = CreateColumnBands(lines, gutters);
         var splitLines = new List<OcrTextBlock>();
         foreach (var line in lines)
         {
@@ -77,6 +74,93 @@ public sealed class OcrTextBlockLayoutGrouper
         }
 
         return splitLines;
+    }
+
+    private static DetectedGutter[] DetectRepeatedVerticalGutters(IReadOnlyList<OcrTextBlock> lines)
+    {
+        if (lines.Count < 4)
+        {
+            return [];
+        }
+
+        var medianLineHeight = Median(lines.Select(line => (double)line.Bounds.Height));
+        var rowTolerance = Math.Max(5, medianLineHeight * 0.65);
+        var rows = BuildRows(lines, rowTolerance);
+        var candidates = new List<DetectedGutter>();
+        var minimumGap = Math.Max(MinimumHorizontalSplitGap, medianLineHeight * 1.35);
+
+        foreach (var row in rows)
+        {
+            var rowLines = row.Lines
+                .OrderBy(line => line.Bounds.X)
+                .ToArray();
+
+            for (var index = 1; index < rowLines.Length; index++)
+            {
+                var left = rowLines[index - 1];
+                var right = rowLines[index];
+                var gap = right.Bounds.X - left.Bounds.Right;
+
+                if (gap < minimumGap)
+                {
+                    continue;
+                }
+
+                candidates.Add(new DetectedGutter(left.Bounds.Right, right.Bounds.X, 1));
+            }
+        }
+
+        if (candidates.Count < 2)
+        {
+            return [];
+        }
+
+        var clusterTolerance = Math.Max(28, medianLineHeight * 1.8);
+        var clusters = new List<DetectedGutterCluster>();
+        foreach (var candidate in candidates.OrderBy(gutter => gutter.Center))
+        {
+            var cluster = clusters
+                .Where(item => Math.Abs(item.Center - candidate.Center) <= clusterTolerance)
+                .OrderBy(item => Math.Abs(item.Center - candidate.Center))
+                .FirstOrDefault();
+
+            if (cluster is null)
+            {
+                clusters.Add(new DetectedGutterCluster(candidate));
+                continue;
+            }
+
+            cluster.Add(candidate);
+        }
+
+        return clusters
+            .Where(cluster => cluster.Votes >= 2)
+            .Select(cluster => cluster.ToGutter())
+            .OrderBy(gutter => gutter.Center)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<LayoutRow> BuildRows(IReadOnlyList<OcrTextBlock> lines, double rowTolerance)
+    {
+        var rows = new List<LayoutRow>();
+        foreach (var line in lines.OrderBy(line => CenterY(line.Bounds)).ThenBy(line => line.Bounds.X))
+        {
+            var matchingRow = rows
+                .Where(row => Math.Abs(row.CenterY - CenterY(line.Bounds)) <= rowTolerance ||
+                    VerticalOverlapRatio(row.Top, row.Bottom, line.Bounds.Y, line.Bounds.Bottom) >= 0.45)
+                .OrderBy(row => Math.Abs(row.CenterY - CenterY(line.Bounds)))
+                .FirstOrDefault();
+
+            if (matchingRow is null)
+            {
+                rows.Add(new LayoutRow(line));
+                continue;
+            }
+
+            matchingRow.Add(line);
+        }
+
+        return rows;
     }
 
     private static IEnumerable<OcrTextBlock> SplitLineByHorizontalProximity(OcrTextBlock line)
@@ -125,65 +209,29 @@ public sealed class OcrTextBlockLayoutGrouper
             : splitLines;
     }
 
-    private static ColumnBand[] DetectColumnBands(IReadOnlyList<OcrWord> words)
+    private static ColumnBand[] CreateColumnBands(
+        IReadOnlyList<OcrTextBlock> lines,
+        IReadOnlyList<DetectedGutter> gutters)
     {
-        var centers = words
-            .Select(word => CenterX(word.Bounds))
-            .Order()
+        var words = lines
+            .SelectMany(line => line.Words)
+            .Where(word => word.Bounds.Width > 0 && word.Bounds.Height > 0)
             .ToArray();
-        var gaps = centers
-            .Zip(centers.Skip(1), (left, right) => right - left)
-            .Where(gap => gap > 0)
-            .ToArray();
-
-        if (gaps.Length == 0)
-        {
-            return [];
-        }
-
-        var medianWordHeight = Median(words.Select(word => word.FontSize));
-        var medianGap = Median(gaps);
-        var columnGapThreshold = Math.Max(42, Math.Max(medianWordHeight * 2.1, medianGap * 8));
-        var splitPositions = centers
-            .Zip(centers.Skip(1), (left, right) => new { Left = left, Right = right, Gap = right - left })
-            .Where(item => item.Gap > columnGapThreshold)
-            .Select(item => (item.Left + item.Right) / 2.0)
-            .ToArray();
-
-        if (splitPositions.Length == 0)
-        {
-            return [];
-        }
-
-        var minX = words.Min(word => (double)word.Bounds.X);
-        var maxX = words.Max(word => (double)word.Bounds.Right);
+        var minX = words.Length == 0
+            ? lines.Min(line => (double)line.Bounds.X)
+            : words.Min(word => (double)word.Bounds.X);
+        var maxX = words.Length == 0
+            ? lines.Max(line => (double)line.Bounds.Right)
+            : words.Max(word => (double)word.Bounds.Right);
         var boundaries = new[] { minX - 1 }
-            .Concat(splitPositions)
+            .Concat(gutters.Select(gutter => gutter.Center))
             .Concat([maxX + 1])
             .ToArray();
         var bands = new List<ColumnBand>();
-        var minimumWordCount = Math.Max(5, words.Count / 100);
 
         for (var index = 0; index < boundaries.Length - 1; index++)
         {
-            var left = boundaries[index];
-            var right = boundaries[index + 1];
-            var bandWords = words
-                .Where(word =>
-                {
-                    var centerX = CenterX(word.Bounds);
-                    return centerX >= left && centerX < right;
-                })
-                .ToArray();
-
-            if (bandWords.Length < minimumWordCount)
-            {
-                continue;
-            }
-
-            bands.Add(new ColumnBand(
-                bandWords.Min(word => (double)word.Bounds.X),
-                bandWords.Max(word => (double)word.Bounds.Right)));
+            bands.Add(new ColumnBand(boundaries[index], boundaries[index + 1]));
         }
 
         return bands.ToArray();
@@ -203,8 +251,15 @@ public sealed class OcrTextBlockLayoutGrouper
         return -1;
     }
 
-    private static IReadOnlyList<LayoutColumn> BuildColumns(IReadOnlyList<OcrTextBlock> lines)
+    private static IReadOnlyList<LayoutColumn> BuildColumns(
+        IReadOnlyList<OcrTextBlock> lines,
+        IReadOnlyList<DetectedGutter> gutters)
     {
+        if (gutters.Count > 0)
+        {
+            return BuildColumnsFromGutters(lines, gutters);
+        }
+
         var columns = new List<LayoutColumn>();
         foreach (var line in lines.OrderBy(line => line.Bounds.X).ThenBy(line => line.Bounds.Y))
         {
@@ -223,6 +278,36 @@ public sealed class OcrTextBlockLayoutGrouper
         }
 
         return columns;
+    }
+
+    private static IReadOnlyList<LayoutColumn> BuildColumnsFromGutters(
+        IReadOnlyList<OcrTextBlock> lines,
+        IReadOnlyList<DetectedGutter> gutters)
+    {
+        var bands = CreateColumnBands(lines, gutters);
+        var columnsByBand = new Dictionary<int, LayoutColumn>();
+
+        foreach (var line in lines.OrderBy(line => line.Bounds.Y).ThenBy(line => line.Bounds.X))
+        {
+            var bandIndex = FindBandIndex(bands, CenterX(line.Bounds));
+            if (bandIndex < 0)
+            {
+                bandIndex = 0;
+            }
+
+            if (!columnsByBand.TryGetValue(bandIndex, out var column))
+            {
+                columnsByBand[bandIndex] = new LayoutColumn(line);
+                continue;
+            }
+
+            column.Add(line);
+        }
+
+        return columnsByBand
+            .OrderBy(item => bands[item.Key].Left)
+            .Select(item => item.Value)
+            .ToArray();
     }
 
     private static IReadOnlyList<OcrTextBlock> GroupColumnLines(IReadOnlyList<OcrTextBlock> columnLines, double medianLineHeight)
@@ -279,6 +364,11 @@ public sealed class OcrTextBlockLayoutGrouper
 
         var verticalGap = currentLine.Bounds.Y - previousLine.Bounds.Bottom;
         if (LooksLikeDashSeparatedListItem(currentLine.Text))
+        {
+            return true;
+        }
+
+        if (AreHorizontallyDetached(previousLine, currentLine, currentBlockFirstLine, medianLineHeight))
         {
             return true;
         }
@@ -489,8 +579,34 @@ public sealed class OcrTextBlockLayoutGrouper
         var typicalWordGap = Median(normalWordGaps);
 
         return typicalWordGap > 0
-            ? Math.Max(34, Math.Max(medianFontSize * 2.35, typicalWordGap * 3.2))
-            : Math.Max(34, medianFontSize * 2.35);
+            ? Math.Max(MinimumHorizontalSplitGap, Math.Max(medianFontSize * 1.55, typicalWordGap * 2.8))
+            : Math.Max(MinimumHorizontalSplitGap, medianFontSize * 1.55);
+    }
+
+    private static bool AreHorizontallyDetached(
+        OcrTextBlock previousLine,
+        OcrTextBlock currentLine,
+        OcrTextBlock currentBlockFirstLine,
+        double medianLineHeight)
+    {
+        if (HorizontalOverlapRatio(previousLine.Bounds, currentLine.Bounds) >= 0.12 ||
+            HorizontalOverlapRatio(currentBlockFirstLine.Bounds, currentLine.Bounds) >= 0.12)
+        {
+            return false;
+        }
+
+        var alignedToPrevious = Math.Abs(currentLine.Bounds.X - previousLine.Bounds.X) <= Math.Max(14, medianLineHeight * 0.9);
+        var alignedToBlock = Math.Abs(currentLine.Bounds.X - currentBlockFirstLine.Bounds.X) <= Math.Max(14, medianLineHeight * 0.9);
+        if (alignedToPrevious || alignedToBlock)
+        {
+            return false;
+        }
+
+        var gapFromPrevious = DistanceBetween(previousLine.Bounds.X, previousLine.Bounds.Right, currentLine.Bounds.X, currentLine.Bounds.Right);
+        var gapFromBlock = DistanceBetween(currentBlockFirstLine.Bounds.X, currentBlockFirstLine.Bounds.Right, currentLine.Bounds.X, currentLine.Bounds.Right);
+        var minimumDetachedGap = Math.Max(MinimumHorizontalSplitGap, medianLineHeight * 1.4);
+
+        return Math.Min(gapFromPrevious, gapFromBlock) >= minimumDetachedGap;
     }
 
     private static bool AreFontSizesSimilar(double previousFontSize, double currentFontSize)
@@ -622,6 +738,25 @@ public sealed class OcrTextBlockLayoutGrouper
         return bounds.X + bounds.Width / 2.0;
     }
 
+    private static double CenterY(BoundingBox bounds)
+    {
+        return bounds.Y + bounds.Height / 2.0;
+    }
+
+    private static double VerticalOverlapRatio(int topA, int bottomA, int topB, int bottomB)
+    {
+        var overlap = Math.Min(bottomA, bottomB) - Math.Max(topA, topB);
+        if (overlap <= 0)
+        {
+            return 0;
+        }
+
+        var smallerHeight = Math.Min(bottomA - topA, bottomB - topB);
+        return smallerHeight <= 0
+            ? 0
+            : overlap / (double)smallerHeight;
+    }
+
     private static double Median(IEnumerable<double> values)
     {
         var sorted = values.Where(value => value > 0).Order().ToArray();
@@ -669,4 +804,70 @@ public sealed class OcrTextBlockLayoutGrouper
     }
 
     private readonly record struct ColumnBand(double Left, double Right);
+
+    private sealed class LayoutRow
+    {
+        private readonly List<OcrTextBlock> _lines = [];
+
+        public LayoutRow(OcrTextBlock firstLine)
+        {
+            Add(firstLine);
+        }
+
+        public int Top { get; private set; }
+
+        public int Bottom { get; private set; }
+
+        public double CenterY => Top + (Bottom - Top) / 2.0;
+
+        public IReadOnlyList<OcrTextBlock> Lines => _lines;
+
+        public void Add(OcrTextBlock line)
+        {
+            if (_lines.Count == 0)
+            {
+                Top = line.Bounds.Y;
+                Bottom = line.Bounds.Bottom;
+            }
+            else
+            {
+                Top = Math.Min(Top, line.Bounds.Y);
+                Bottom = Math.Max(Bottom, line.Bounds.Bottom);
+            }
+
+            _lines.Add(line);
+        }
+    }
+
+    private readonly record struct DetectedGutter(double Left, double Right, int Votes)
+    {
+        public double Center => (Left + Right) / 2.0;
+    }
+
+    private sealed class DetectedGutterCluster
+    {
+        private readonly List<DetectedGutter> _gutters = [];
+
+        public DetectedGutterCluster(DetectedGutter first)
+        {
+            Add(first);
+        }
+
+        public double Center => _gutters.Average(gutter => gutter.Center);
+
+        public int Votes => _gutters.Sum(gutter => gutter.Votes);
+
+        public void Add(DetectedGutter gutter)
+        {
+            _gutters.Add(gutter);
+        }
+
+        public DetectedGutter ToGutter()
+        {
+            return new DetectedGutter(
+                _gutters.Average(gutter => gutter.Left),
+                _gutters.Average(gutter => gutter.Right),
+                Votes);
+        }
+    }
 }
