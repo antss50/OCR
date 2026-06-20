@@ -150,7 +150,7 @@ public partial class MainWindow : Window
 
         StatusText.Text = $"Frame changed. English OCR found {ocrResult.Blocks.Count} text block(s).";
         BlocksListBox.ItemsSource = ocrResult.Blocks
-            .Select(block => $"{block.Bounds.X},{block.Bounds.Y} {block.Bounds.Width}x{block.Bounds.Height}: {block.Text}")
+            .Select(block => $"{block.Bounds.X},{block.Bounds.Y} {block.Bounds.Width}x{block.Bounds.Height}, font {block.FontSize:0}: {block.Text}")
             .ToArray();
 
         var builder = new StringBuilder();
