@@ -132,8 +132,9 @@
                              Grid.Row="4"
                              Margin="0,8,0,0"
                              BorderBrush="#E5E7EB"
-                             ScrollViewer.CanContentScroll="True"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             HorizontalContentAlignment="Left"
+                             ScrollViewer.CanContentScroll="False"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
                              ScrollViewer.VerticalScrollBarVisibility="Visible" />
                 </Grid>
             </Border>

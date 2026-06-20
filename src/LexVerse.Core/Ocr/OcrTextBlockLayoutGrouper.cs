@@ -5,9 +5,10 @@ namespace LexVerse.Core.Ocr;
 
 public sealed class OcrTextBlockLayoutGrouper
 {
-    private const double ParagraphGapFactor = 0.95;
     private const double IndentFactor = 1.6;
+    private const double MergeScoreThreshold = 0.74;
     private static readonly Regex BulletOrNumberedItemRegex = new("^\\s*(?:[\\u2022\\-*]|[0-9]+[.)])\\s+", RegexOptions.Compiled);
+    private static readonly Regex DashSeparatedListItemRegex = new("^\\s*\\S+(?:\\s+\\S+){0,4}\\s+(?:[-\\u2013\\u2014])\\s+\\S+", RegexOptions.Compiled);
 
     public IReadOnlyList<OcrTextBlock> GroupLines(IEnumerable<OcrTextBlock> lineBlocks)
     {
@@ -94,9 +95,8 @@ public sealed class OcrTextBlockLayoutGrouper
             .Where(gap => gap > 0)
             .Select(gap => (double)gap)
             .ToArray();
-        var medianGap = Median(gaps);
         var medianFontSize = Median(orderedWords.Select(word => word.FontSize));
-        var splitGap = Math.Max(30, Math.Max(medianFontSize * 1.35, medianGap * 2.0));
+        var splitGap = CalculateHorizontalSplitGap(gaps, medianFontSize);
         var splitLines = new List<OcrTextBlock>();
         var currentWords = new List<OcrWord> { orderedWords[0] };
 
@@ -278,7 +278,7 @@ public sealed class OcrTextBlockLayoutGrouper
         }
 
         var verticalGap = currentLine.Bounds.Y - previousLine.Bounds.Bottom;
-        if (verticalGap > Math.Max(8, medianLineHeight * ParagraphGapFactor))
+        if (LooksLikeDashSeparatedListItem(currentLine.Text))
         {
             return true;
         }
@@ -291,7 +291,8 @@ public sealed class OcrTextBlockLayoutGrouper
             return true;
         }
 
-        return false;
+        var mergeScore = CalculateMergeScore(previousLine, currentLine, currentBlockFirstLine, verticalGap, medianLineHeight);
+        return mergeScore < MergeScoreThreshold;
     }
 
     private static OcrTextBlock MergeLines(IReadOnlyList<OcrTextBlock> lines)
@@ -352,6 +353,232 @@ public sealed class OcrTextBlockLayoutGrouper
         return BulletOrNumberedItemRegex.IsMatch(text);
     }
 
+    private static bool LooksLikeDashSeparatedListItem(string text)
+    {
+        return DashSeparatedListItemRegex.IsMatch(text);
+    }
+
+    private static bool LooksLikeTitleDescriptionPair(
+        OcrTextBlock previousLine,
+        OcrTextBlock currentLine,
+        int verticalGap,
+        double medianLineHeight)
+    {
+        if (verticalGap < 0 || verticalGap > Math.Max(10, medianLineHeight * 0.65))
+        {
+            return false;
+        }
+
+        if (LooksLikeDashSeparatedListItem(previousLine.Text) || LooksLikeDashSeparatedListItem(currentLine.Text))
+        {
+            return false;
+        }
+
+        var previousWordCount = CountWords(previousLine.Text);
+        var currentWordCount = CountWords(currentLine.Text);
+        var aligned = Math.Abs(previousLine.Bounds.X - currentLine.Bounds.X) <= Math.Max(12, medianLineHeight * 0.8);
+        var previousLooksLikeTitle = previousWordCount <= 3 &&
+            previousLine.Bounds.Width <= Math.Max(180, medianLineHeight * 12) &&
+            !EndsLikeParagraph(previousLine.Text);
+
+        return aligned && previousLooksLikeTitle && currentWordCount <= 8;
+    }
+
+    private static double CalculateMergeScore(
+        OcrTextBlock previousLine,
+        OcrTextBlock currentLine,
+        OcrTextBlock currentBlockFirstLine,
+        int verticalGap,
+        double medianLineHeight)
+    {
+        if (verticalGap < 0)
+        {
+            return 0;
+        }
+
+        var score = 0.0;
+        score += CalculateVerticalProximityScore(verticalGap, medianLineHeight);
+
+        if (AreFontSizesSimilar(previousLine.FontSize, currentLine.FontSize))
+        {
+            score += 0.25;
+        }
+
+        var horizontalOverlap = HorizontalOverlapRatio(previousLine.Bounds, currentLine.Bounds);
+        if (horizontalOverlap >= 0.55)
+        {
+            score += 0.18;
+        }
+
+        var alignedToBlock = Math.Abs(currentLine.Bounds.X - currentBlockFirstLine.Bounds.X) <= Math.Max(14, medianLineHeight * 0.9);
+        var alignedToPrevious = Math.Abs(currentLine.Bounds.X - previousLine.Bounds.X) <= Math.Max(14, medianLineHeight * 0.9);
+        if (alignedToBlock || alignedToPrevious)
+        {
+            score += 0.20;
+        }
+
+        if (AreWidthsSimilar(previousLine.Bounds.Width, currentLine.Bounds.Width) ||
+            BothLookLikeParagraphLines(previousLine, currentLine, medianLineHeight))
+        {
+            score += 0.06;
+        }
+
+        if (!EndsLikeHardSentenceBoundary(previousLine.Text))
+        {
+            score += 0.18;
+        }
+
+        if (EndsWithSoftWrapCue(previousLine.Text))
+        {
+            score += 0.04;
+        }
+
+        if (StartsLikeParagraphContinuation(currentLine.Text))
+        {
+            score += 0.08;
+        }
+
+        if (LooksLikeTitleDescriptionPair(previousLine, currentLine, verticalGap, medianLineHeight))
+        {
+            score = Math.Max(score, 0.94);
+        }
+
+        if (LooksLikeStandaloneHeading(currentLine, verticalGap, medianLineHeight))
+        {
+            score -= 0.30;
+        }
+
+        if (LooksLikeDashSeparatedListItem(previousLine.Text) || LooksLikeDashSeparatedListItem(currentLine.Text))
+        {
+            score -= 0.35;
+        }
+
+        return Math.Clamp(score, 0, 1);
+    }
+
+    private static double CalculateVerticalProximityScore(int verticalGap, double medianLineHeight)
+    {
+        if (verticalGap <= Math.Max(4, medianLineHeight * 0.25))
+        {
+            return 0.34;
+        }
+
+        if (verticalGap <= Math.Max(8, medianLineHeight * 0.55))
+        {
+            return 0.28;
+        }
+
+        if (verticalGap <= Math.Max(14, medianLineHeight * 0.95))
+        {
+            return 0.18;
+        }
+
+        if (verticalGap <= Math.Max(18, medianLineHeight * 1.25))
+        {
+            return 0.08;
+        }
+
+        return 0;
+    }
+
+    private static double CalculateHorizontalSplitGap(IReadOnlyList<double> gaps, double medianFontSize)
+    {
+        var normalWordGaps = gaps
+            .Where(gap => gap <= Math.Max(24, medianFontSize * 2.4))
+            .ToArray();
+        var typicalWordGap = Median(normalWordGaps);
+
+        return typicalWordGap > 0
+            ? Math.Max(34, Math.Max(medianFontSize * 2.35, typicalWordGap * 3.2))
+            : Math.Max(34, medianFontSize * 2.35);
+    }
+
+    private static bool AreFontSizesSimilar(double previousFontSize, double currentFontSize)
+    {
+        var larger = Math.Max(previousFontSize, currentFontSize);
+        if (larger <= 0)
+        {
+            return false;
+        }
+
+        var smaller = Math.Min(previousFontSize, currentFontSize);
+        return smaller / larger >= 0.86;
+    }
+
+    private static bool AreWidthsSimilar(int previousWidth, int currentWidth)
+    {
+        var larger = Math.Max(previousWidth, currentWidth);
+        if (larger <= 0)
+        {
+            return false;
+        }
+
+        var smaller = Math.Min(previousWidth, currentWidth);
+        return smaller / (double)larger >= 0.45;
+    }
+
+    private static bool BothLookLikeParagraphLines(
+        OcrTextBlock previousLine,
+        OcrTextBlock currentLine,
+        double medianLineHeight)
+    {
+        return previousLine.Bounds.Width >= Math.Max(220, medianLineHeight * 14) &&
+            currentLine.Bounds.Width >= Math.Max(180, medianLineHeight * 11);
+    }
+
+    private static bool EndsWithSoftWrapCue(string text)
+    {
+        var trimmed = text.TrimEnd();
+        return trimmed.EndsWith(',') || trimmed.EndsWith(';') || trimmed.EndsWith('-') ||
+            trimmed.EndsWith('(') || trimmed.EndsWith('/');
+    }
+
+    private static bool EndsLikeHardSentenceBoundary(string text)
+    {
+        var trimmed = text.TrimEnd();
+        return trimmed.EndsWith('.') || trimmed.EndsWith('?') || trimmed.EndsWith('!') ||
+            trimmed.EndsWith(':');
+    }
+
+    private static bool StartsLikeParagraphContinuation(string text)
+    {
+        var trimmed = text.TrimStart();
+        if (trimmed.Length == 0)
+        {
+            return false;
+        }
+
+        return char.IsLower(trimmed[0]) ||
+            trimmed.StartsWith("and ", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("or ", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("but ", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("with ", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("where ", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("which ", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("that ", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("other ", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeStandaloneHeading(
+        OcrTextBlock line,
+        int verticalGap,
+        double medianLineHeight)
+    {
+        if (verticalGap <= Math.Max(6, medianLineHeight * 0.35))
+        {
+            return false;
+        }
+
+        return CountWords(line.Text) <= 5 &&
+            line.Bounds.Width <= Math.Max(260, medianLineHeight * 14) &&
+            !EndsLikeParagraph(line.Text);
+    }
+
+    private static int CountWords(string text)
+    {
+        return text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length;
+    }
+
     private static bool EndsLikeParagraph(string text)
     {
         var trimmed = text.TrimEnd();
@@ -362,6 +589,20 @@ public sealed class OcrTextBlockLayoutGrouper
     private static bool OverlapsHorizontally(int leftA, int rightA, int leftB, int rightB)
     {
         return Math.Min(rightA, rightB) > Math.Max(leftA, leftB);
+    }
+
+    private static double HorizontalOverlapRatio(BoundingBox left, BoundingBox right)
+    {
+        var overlap = Math.Min(left.Right, right.Right) - Math.Max(left.X, right.X);
+        if (overlap <= 0)
+        {
+            return 0;
+        }
+
+        var smallerWidth = Math.Min(left.Width, right.Width);
+        return smallerWidth <= 0
+            ? 0
+            : overlap / (double)smallerWidth;
     }
 
     private static int DistanceBetween(int leftA, int rightA, int leftB, int rightB)

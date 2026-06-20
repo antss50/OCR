@@ -144,8 +144,7 @@ public sealed class WindowsOcrService : IOcrService
             .Where(gap => gap > 0)
             .Select(gap => (double)gap)
             .ToArray();
-        var medianGap = Median(gaps);
-        var columnGapThreshold = Math.Max(28, Math.Max(medianWordHeight * 1.15, medianGap * 1.8));
+        var columnGapThreshold = CalculateHorizontalSplitGap(gaps, medianWordHeight);
         var visualLines = new List<IReadOnlyList<CoreOcrWord>>();
         var currentLine = new List<CoreOcrWord> { orderedWords[0] };
 
@@ -233,6 +232,18 @@ public sealed class WindowsOcrService : IOcrService
         return sorted.Length % 2 == 0
             ? (sorted[middle - 1] + sorted[middle]) / 2
             : sorted[middle];
+    }
+
+    private static double CalculateHorizontalSplitGap(IReadOnlyList<double> gaps, double medianWordHeight)
+    {
+        var normalWordGaps = gaps
+            .Where(gap => gap <= Math.Max(24, medianWordHeight * 2.4))
+            .ToArray();
+        var typicalWordGap = Median(normalWordGaps);
+
+        return typicalWordGap > 0
+            ? Math.Max(34, Math.Max(medianWordHeight * 2.35, typicalWordGap * 3.2))
+            : Math.Max(34, medianWordHeight * 2.35);
     }
 
     private sealed class VisualRow
