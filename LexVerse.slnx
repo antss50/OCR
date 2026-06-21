@@ -1,12 +1,14 @@
 <Solution>
   <Folder Name="/samples/">
     <Project Path="samples/LexVerse.Demo.Wpf/LexVerse.Demo.Wpf.csproj" />
+    <Project Path="samples/LexVerse.Overlay.Sample/LexVerse.Overlay.Sample.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/LexVerse.App/LexVerse.App.csproj" />
     <Project Path="src/LexVerse.Core/LexVerse.Core.csproj" />
     <Project Path="src/LexVerse.Infrastructure/LexVerse.Infrastructure.csproj" />
     <Project Path="src/LexVerse.OCR/LexVerse.OCR.csproj" />
+    <Project Path="src/LexVerse.Overlay/LexVerse.Overlay.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj" />
