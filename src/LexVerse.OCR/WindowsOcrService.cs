@@ -11,6 +11,7 @@ namespace LexVerse.OCR;
 public sealed class WindowsOcrService : IOcrService
 {
     private const string DefaultLanguageTag = "en-US";
+    private const double MinimumHorizontalSplitGap = 22;
 
     private readonly OcrEngine _engine;
     private readonly OcrTextBlockLayoutGrouper _layoutGrouper = new();
@@ -242,8 +243,8 @@ public sealed class WindowsOcrService : IOcrService
         var typicalWordGap = Median(normalWordGaps);
 
         return typicalWordGap > 0
-            ? Math.Max(34, Math.Max(medianWordHeight * 2.35, typicalWordGap * 3.2))
-            : Math.Max(34, medianWordHeight * 2.35);
+            ? Math.Max(MinimumHorizontalSplitGap, Math.Max(medianWordHeight * 1.55, typicalWordGap * 2.8))
+            : Math.Max(MinimumHorizontalSplitGap, medianWordHeight * 1.55);
     }
 
     private sealed class VisualRow
