@@ -8,4 +8,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\LexVerse.Overlay\LexVerse.Overlay.csproj" />
+  </ItemGroup>
+
 </Project>

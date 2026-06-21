@@ -3,4 +3,7 @@
     <Project Path="src/LexVerse.App/LexVerse.App.csproj" />
     <Project Path="src/LexVerse.Overlay/LexVerse.Overlay.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/LexVerse.Overlay.Sample/LexVerse.Overlay.Sample.csproj" />
+  </Folder>
 </Solution>

@@ -13,28 +13,39 @@ namespace LexVerse.Overlay.Models
         public string Text
         {
             get => _text;
-            set { _text = value; OnPropertyChanged(); }
+            set => SetField(ref _text, value);
         }
 
         public double X
         {
             get => _x;
-            set { _x = value; OnPropertyChanged(); }
+            set => SetField(ref _x, value);
         }
 
         public double Y
         {
             get => _y;
-            set { _y = value; OnPropertyChanged(); }
+            set => SetField(ref _y, value);
         }
 
         public double FontSize
         {
             get => _fontSize;
-            set { _fontSize = value; OnPropertyChanged(); }
+            set => SetField(ref _fontSize, value);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
+
+        private void SetField<T>(ref T field, T value, [CallerMemberName] string? propName = null)
+        {
+            if (Equals(field, value))
+            {
+                return;
+            }
+
+            field = value;
+            OnPropertyChanged(propName);
+        }
 
         private void OnPropertyChanged([CallerMemberName] string? propName = null)
         {

@@ -1,29 +1,35 @@
 using System;
+using System.Collections.ObjectModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using LexVerse.Overlay.Models;
 
 namespace LexVerse.Overlay
 {
     public partial class MainWindow : Window
     {
-        private readonly OverlayDemo _demo = new OverlayDemo();
+        public ObservableCollection<TextItem> Items { get; }
 
         public MainWindow()
+            : this(new ObservableCollection<TextItem>())
         {
+        }
+
+        public MainWindow(ObservableCollection<TextItem> items)
+        {
+            Items = items ?? throw new ArgumentNullException(nameof(items));
             InitializeComponent();
-            DataContext = _demo;
+            DataContext = this;
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            // Make window full screen (cover primary monitor)
             Left = 0;
             Top = 0;
             Width = SystemParameters.PrimaryScreenWidth;
             Height = SystemParameters.PrimaryScreenHeight;
 
-            // Set click-through + toolwindow so it doesn't show in taskbar
             var hwnd = new WindowInteropHelper(this).Handle;
             int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
             exStyle |= WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
