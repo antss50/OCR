@@ -6,4 +6,5 @@ namespace LexVerse.Core.Pipeline;
 public sealed record ScreenOcrPipelineResult(
     CapturedFrame Frame,
     bool Changed,
-    OcrResult? OcrResult);
+    OcrResult? OcrResult,
+    ScreenOcrPipelineTiming Timing);

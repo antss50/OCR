@@ -1,8 +1,11 @@
 using System.Runtime.InteropServices;
+using LexVerse.Core.Capture;
+using LexVerse.Core.Geometry;
 using LexVerse.Core.Imaging;
 using LexVerse.Core.ScreenCapture;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
+using Windows.Graphics;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
@@ -16,22 +19,36 @@ public sealed class WindowsGraphicsCaptureSession : IScreenCaptureSession
     private readonly IDirect3DDevice _direct3DDevice;
     private readonly Direct3D11CaptureFramePool _framePool;
     private readonly GraphicsCaptureSession _session;
+    private readonly CaptureSourceInfo _source;
+    private readonly Func<PixelSize, FrameGeometry>? _geometryProvider;
+    private SizeInt32 _framePoolSize;
+    private ScreenRect? _lastSourceScreenRect;
+    private long _geometryVersion;
 
     private WindowsGraphicsCaptureSession(
         ID3D11Device d3dDevice,
         ID3D11DeviceContext d3dContext,
         IDirect3DDevice direct3DDevice,
         Direct3D11CaptureFramePool framePool,
-        GraphicsCaptureSession session)
+        GraphicsCaptureSession session,
+        SizeInt32 framePoolSize,
+        CaptureSourceInfo source,
+        Func<PixelSize, FrameGeometry>? geometryProvider)
     {
         _d3dDevice = d3dDevice;
         _d3dContext = d3dContext;
         _direct3DDevice = direct3DDevice;
         _framePool = framePool;
         _session = session;
+        _source = source;
+        _geometryProvider = geometryProvider;
+        _framePoolSize = framePoolSize;
     }
 
-    public static WindowsGraphicsCaptureSession Create(GraphicsCaptureItem item)
+    public static WindowsGraphicsCaptureSession Create(
+        GraphicsCaptureItem item,
+        Func<PixelSize, FrameGeometry>? geometryProvider = null,
+        CaptureSourceInfo? source = null)
     {
         ArgumentNullException.ThrowIfNull(item);
 
@@ -59,13 +76,29 @@ public sealed class WindowsGraphicsCaptureSession : IScreenCaptureSession
         var session = framePool.CreateCaptureSession(item);
         session.StartCapture();
 
-        return new WindowsGraphicsCaptureSession(d3dDevice, d3dContext, direct3DDevice, framePool, session);
+        return new WindowsGraphicsCaptureSession(
+            d3dDevice,
+            d3dContext,
+            direct3DDevice,
+            framePool,
+            session,
+            item.Size,
+            source ?? new CaptureSourceInfo(CaptureSourceKind.Picker, item.DisplayName),
+            geometryProvider);
     }
 
     public async Task<CapturedFrame> CaptureFrameAsync(CancellationToken cancellationToken = default)
     {
-        using var frame = await WaitForFrameAsync(cancellationToken);
-        return CopyFrameToCpu(frame);
+        while (true)
+        {
+            using var frame = await WaitForFrameAsync(cancellationToken);
+            if (RecreateFramePoolIfNeeded(frame.ContentSize))
+            {
+                continue;
+            }
+
+            return CopyFrameToCpu(frame);
+        }
     }
 
     public ValueTask DisposeAsync()
@@ -142,6 +175,8 @@ public sealed class WindowsGraphicsCaptureSession : IScreenCaptureSession
     {
         using var sourceTexture = Direct3DInterop.GetTexture2DFromSurface(frame.Surface);
         var sourceDescription = sourceTexture.Description;
+        var width = Math.Min(frame.ContentSize.Width, (int)sourceDescription.Width);
+        var height = Math.Min(frame.ContentSize.Height, (int)sourceDescription.Height);
         var stagingDescription = sourceDescription;
         stagingDescription.BindFlags = BindFlags.None;
         stagingDescription.CPUAccessFlags = CpuAccessFlags.Read;
@@ -154,8 +189,6 @@ public sealed class WindowsGraphicsCaptureSession : IScreenCaptureSession
         _d3dContext.Map(stagingTexture, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None, out var mapped);
         try
         {
-            var width = (int)sourceDescription.Width;
-            var height = (int)sourceDescription.Height;
             var destinationStride = width * 4;
             var pixels = new byte[destinationStride * height];
 
@@ -175,11 +208,54 @@ public sealed class WindowsGraphicsCaptureSession : IScreenCaptureSession
                 destinationStride,
                 PixelFormat.Bgra8,
                 pixels,
-                DateTimeOffset.UtcNow);
+                DateTimeOffset.UtcNow,
+                CreateFrameGeometry(width, height),
+                _source);
         }
         finally
         {
             _d3dContext.Unmap(stagingTexture, 0);
         }
+    }
+
+    private FrameGeometry CreateFrameGeometry(int width, int height)
+    {
+        var frameSize = new PixelSize(width, height);
+        if (_geometryProvider is null)
+        {
+            return FrameGeometry.FrameLocal(frameSize, _geometryVersion);
+        }
+
+        var geometry = _geometryProvider(frameSize);
+        if (_lastSourceScreenRect is null || !_lastSourceScreenRect.Value.Equals(geometry.SourceScreenRect))
+        {
+            _geometryVersion++;
+            _lastSourceScreenRect = geometry.SourceScreenRect;
+        }
+
+        geometry = geometry with
+        {
+            Version = _geometryVersion
+        };
+        geometry.Validate();
+        return geometry;
+    }
+
+    private bool RecreateFramePoolIfNeeded(SizeInt32 contentSize)
+    {
+        if (contentSize.Width == _framePoolSize.Width &&
+            contentSize.Height == _framePoolSize.Height)
+        {
+            return false;
+        }
+
+        _framePool.Recreate(
+            _direct3DDevice,
+            DirectXPixelFormat.B8G8R8A8UIntNormalized,
+            2,
+            contentSize);
+        _framePoolSize = contentSize;
+        _geometryVersion++;
+        return true;
     }
 }

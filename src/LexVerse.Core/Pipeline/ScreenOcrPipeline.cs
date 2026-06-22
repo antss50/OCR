@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LexVerse.Core.Imaging;
 using LexVerse.Core.Ocr;
 using LexVerse.Core.ScreenCapture;
@@ -25,19 +26,46 @@ public sealed class ScreenOcrPipeline
 
     public async Task<ScreenOcrPipelineResult> CaptureAndRecognizeAsync(CancellationToken cancellationToken = default)
     {
+        var totalTimer = Stopwatch.StartNew();
+        var captureTimer = Stopwatch.StartNew();
         var frame = await _captureSession.CaptureFrameAsync(cancellationToken);
+        captureTimer.Stop();
+
+        var changeDetectionTimer = Stopwatch.StartNew();
         var changed = _changeDetector.HasChanged(frame);
+        changeDetectionTimer.Stop();
 
         if (!changed)
         {
-            return new ScreenOcrPipelineResult(frame, false, null);
+            totalTimer.Stop();
+            return new ScreenOcrPipelineResult(
+                frame,
+                false,
+                null,
+                new ScreenOcrPipelineTiming(
+                    captureTimer.Elapsed,
+                    changeDetectionTimer.Elapsed,
+                    TimeSpan.Zero,
+                    TimeSpan.Zero,
+                    totalTimer.Elapsed));
         }
 
         var ocrResult = await RecognizeFrameOrRegionsAsync(frame, cancellationToken);
-        return new ScreenOcrPipelineResult(frame, true, ocrResult);
+        totalTimer.Stop();
+
+        return new ScreenOcrPipelineResult(
+            frame,
+            true,
+            ocrResult.Result,
+            new ScreenOcrPipelineTiming(
+                captureTimer.Elapsed,
+                changeDetectionTimer.Elapsed,
+                ocrResult.RegionMask,
+                ocrResult.Ocr,
+                totalTimer.Elapsed));
     }
 
-    private async Task<OcrResult> RecognizeFrameOrRegionsAsync(
+    private async Task<TimedOcrResult> RecognizeFrameOrRegionsAsync(
         CapturedFrame frame,
         CancellationToken cancellationToken)
     {
@@ -47,15 +75,26 @@ public sealed class ScreenOcrPipeline
 
         if (regions is null || regions.Length == 0)
         {
-            return await _ocrService.RecognizeAsync(frame, cancellationToken);
+            var fullFrameOcrTimer = Stopwatch.StartNew();
+            var fullFrameOcrResult = await _ocrService.RecognizeAsync(frame, cancellationToken);
+            fullFrameOcrTimer.Stop();
+            return new TimedOcrResult(fullFrameOcrResult, TimeSpan.Zero, fullFrameOcrTimer.Elapsed);
         }
 
+        var regionMaskTimer = Stopwatch.StartNew();
         var maskedFrame = CapturedFrameRegionMasker.KeepRegions(
             frame,
             regions
                 .Select(region => new RegionBounds(region.X, region.Y, region.Width, region.Height))
                 .ToArray());
+        regionMaskTimer.Stop();
 
-        return await _ocrService.RecognizeAsync(maskedFrame, cancellationToken);
+        var ocrTimer = Stopwatch.StartNew();
+        var ocrResult = await _ocrService.RecognizeAsync(maskedFrame, cancellationToken);
+        ocrTimer.Stop();
+
+        return new TimedOcrResult(ocrResult, regionMaskTimer.Elapsed, ocrTimer.Elapsed);
     }
+
+    private sealed record TimedOcrResult(OcrResult Result, TimeSpan RegionMask, TimeSpan Ocr);
 }

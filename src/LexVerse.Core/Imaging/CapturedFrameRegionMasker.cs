@@ -31,7 +31,10 @@ public static class CapturedFrameRegionMasker
             frame.Stride,
             frame.PixelFormat,
             pixels,
-            frame.CapturedAt);
+            frame.CapturedAt,
+            frame.Geometry,
+            frame.Source,
+            frame.FrameId);
     }
 
     private static void FillOpaqueBlack(byte[] pixels)

@@ -1,3 +1,5 @@
+using LexVerse.Core.Geometry;
+
 namespace LexVerse.Core.Imaging;
 
 public static class CapturedFrameCropper
@@ -46,6 +48,28 @@ public static class CapturedFrameCropper
             cropStride,
             frame.PixelFormat,
             cropPixels,
-            frame.CapturedAt);
+            frame.CapturedAt,
+            CreateCropGeometry(frame, cropX, cropY, cropWidth, cropHeight),
+            frame.Source,
+            frame.FrameId);
+    }
+
+    private static FrameGeometry CreateCropGeometry(
+        CapturedFrame frame,
+        int cropX,
+        int cropY,
+        int cropWidth,
+        int cropHeight)
+    {
+        var cropScreenRect = new CoordinateMapper(frame.Geometry)
+            .FrameToScreen(new FrameRect(cropX, cropY, cropWidth, cropHeight));
+
+        return new FrameGeometry(
+                new PixelSize(cropWidth, cropHeight),
+                cropScreenRect,
+                frame.Geometry.FrameCoordinateSpace,
+                frame.Geometry.DpiScaleX,
+                frame.Geometry.DpiScaleY,
+                frame.Geometry.Version);
     }
 }

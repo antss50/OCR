@@ -2,11 +2,14 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using LexVerse.Core.Capture;
+using LexVerse.Core.Geometry;
 using LexVerse.Core.Pipeline;
 using LexVerse.Core.ScreenCapture;
 using LexVerse.Core.Translation;
 using LexVerse.Infrastructure.Capture;
 using LexVerse.Infrastructure.Translation;
+using LexVerse.Infrastructure.Windows;
 using LexVerse.OCR;
 using LexVerse.Overlay.Models;
 using Windows.Graphics.Capture;
@@ -22,6 +25,8 @@ public partial class MainWindow : Window
 
     private readonly ObservableCollection<TextItem> _overlayItems = [];
     private GraphicsCaptureItem? _captureItem;
+    private Func<PixelSize, FrameGeometry>? _captureGeometryProvider;
+    private CaptureSourceInfo? _captureSourceInfo;
     private WindowsGraphicsCaptureSession? _captureSession;
     private OverlayWindow? _overlayWindow;
     private CancellationTokenSource? _pipelineCancellation;
@@ -43,16 +48,24 @@ public partial class MainWindow : Window
             _captureItem = await picker.PickSingleItemAsync();
             if (_captureItem is null)
             {
+                _captureGeometryProvider = null;
+                _captureSourceInfo = null;
                 StatusText.Text = "Selection canceled.";
                 StartButton.IsEnabled = false;
                 return;
             }
 
-            StatusText.Text = $"Selected: {_captureItem.DisplayName}";
+            var binding = CreateCaptureBinding(_captureItem);
+            _captureGeometryProvider = binding.GeometryProvider;
+            _captureSourceInfo = binding.SourceInfo;
+
+            StatusText.Text = $"Selected: {_captureItem.DisplayName}. {binding.Status}";
             StartButton.IsEnabled = true;
         }
         catch (Exception ex)
         {
+            _captureGeometryProvider = null;
+            _captureSourceInfo = null;
             StatusText.Text = $"Could not choose source: {ex.Message}";
             StartButton.IsEnabled = false;
         }
@@ -70,7 +83,10 @@ public partial class MainWindow : Window
 
         try
         {
-            _captureSession = WindowsGraphicsCaptureSession.Create(_captureItem);
+            _captureSession = WindowsGraphicsCaptureSession.Create(
+                _captureItem,
+                _captureGeometryProvider,
+                _captureSourceInfo);
             _overlayWindow = new OverlayWindow(_overlayItems);
             _overlayWindow.Show();
             _pipelineCancellation = new CancellationTokenSource();
@@ -116,8 +132,14 @@ public partial class MainWindow : Window
         {
             try
             {
-                var result = await pipeline.CaptureRecognizeAndTranslateAsync(cancellationToken);
-                RenderResult(result);
+                var result = await pipeline.CaptureRecognizeAndTranslateAsync(
+                    cancellationToken,
+                    (partialResult, _) =>
+                    {
+                        RenderResult(partialResult, isPartial: true);
+                        return Task.CompletedTask;
+                    });
+                RenderResult(result, isPartial: false);
                 await Task.Delay(options.OcrInterval, cancellationToken);
             }
             catch (OperationCanceledException)
@@ -134,7 +156,7 @@ public partial class MainWindow : Window
         await Dispatcher.InvokeAsync(async () => await StopPipelineAsync());
     }
 
-    private void RenderResult(RealtimeTranslationPipelineResult result)
+    private void RenderResult(RealtimeTranslationPipelineResult result, bool isPartial)
     {
         Dispatcher.Invoke(() =>
         {
@@ -142,50 +164,74 @@ public partial class MainWindow : Window
 
             if (!result.Ocr.Changed)
             {
-                StatusText.Text = "Frame unchanged. OCR skipped.";
+                StatusText.Text = $"Frame unchanged. OCR skipped. {FormatTiming(result.Timing)}";
                 return;
             }
 
-            StatusText.Text = $"OCR {result.Ocr.OcrResult?.Blocks.Count ?? 0} block(s), translated {result.TranslatedBlocks.Count}.";
-            BlocksListBox.ItemsSource = result.TranslatedBlocks
-                .Select(block => $"{block.Bounds.X},{block.Bounds.Y} {block.Bounds.Width}x{block.Bounds.Height}: {block.TranslatedText}")
+            var prefix = isPartial ? "Partial" : "Done";
+            StatusText.Text = $"{prefix}: OCR {result.Ocr.OcrResult?.Blocks.Count ?? 0} block(s), translated {result.TranslatedBlocks.Count}. {FormatTiming(result.Timing)}";
+            BlocksListBox.ItemsSource = result.OverlayFrame.Items
+                .Select(item => $"{item.TargetRect.X:0},{item.TargetRect.Y:0} {item.TargetRect.Width:0}x{item.TargetRect.Height:0}: {item.TranslatedText}")
+                .Prepend(FormatTimingDetails(result.Timing))
                 .ToArray();
         });
     }
 
+    private static string FormatTiming(RealtimeTranslationPipelineTiming timing)
+    {
+        return $"total {Ms(timing.Total)}ms | capture {Ms(timing.Capture)} | detect {Ms(timing.ChangeDetection)} | mask {Ms(timing.RegionMask)} | ocr {Ms(timing.Ocr)} | translate {Ms(timing.Translation)} | cache {timing.CacheHits}/{timing.CacheMisses}";
+    }
+
+    private static string FormatTimingDetails(RealtimeTranslationPipelineTiming timing)
+    {
+        return string.Join(
+            "  ",
+            $"total={Ms(timing.Total)}ms",
+            $"capture={Ms(timing.Capture)}ms",
+            $"change={Ms(timing.ChangeDetection)}ms",
+            $"mask={Ms(timing.RegionMask)}ms",
+            $"ocr={Ms(timing.Ocr)}ms",
+            $"translate={Ms(timing.Translation)}ms",
+            $"cacheHit={timing.CacheHits}",
+            $"cacheMiss={timing.CacheMisses}");
+    }
+
+    private static long Ms(TimeSpan value)
+    {
+        return (long)Math.Round(value.TotalMilliseconds);
+    }
+
     private void UpdateOverlay(RealtimeTranslationPipelineResult result)
     {
-        var translatedBlocks = result.TranslatedBlocks;
-        var frame = result.Ocr.Frame;
-        var overlayWidth = _overlayWindow?.ActualWidth > 0
-            ? _overlayWindow.ActualWidth
-            : SystemParameters.PrimaryScreenWidth;
-        var overlayHeight = _overlayWindow?.ActualHeight > 0
-            ? _overlayWindow.ActualHeight
-            : SystemParameters.PrimaryScreenHeight;
-        var scaleX = overlayWidth / frame.Width;
-        var scaleY = overlayHeight / frame.Height;
-
         _overlayItems.Clear();
         var showDebugBoxes = DebugOverlayBox.IsChecked == true;
 
-        for (var index = 0; index < translatedBlocks.Count; index++)
+        if (_overlayWindow is null)
         {
-            var block = translatedBlocks[index];
-            var x = block.Bounds.X * scaleX;
-            var y = block.Bounds.Y * scaleY;
-            var width = CalculateOverlayTextWidth(block, scaleX);
-            var minHeight = Math.Max(18, block.Bounds.Height * scaleY);
+            return;
+        }
+
+        foreach (var item in result.OverlayFrame.Items)
+        {
+            var targetRect = _overlayWindow.ScreenPhysicalToLocalDip(item.TargetRect);
+            var x = targetRect.X;
+            var y = targetRect.Y;
+            var paddedX = Math.Max(0, x - OverlayHorizontalPadding);
+            var paddedY = Math.Max(0, y - OverlayVerticalPadding);
+            var width = Math.Max(24, targetRect.Width);
+            var minHeight = Math.Max(18, targetRect.Height);
+            var maxWidth = Math.Max(24, _overlayWindow.ActualWidth - paddedX);
 
             if (showDebugBoxes)
             {
+                var sourceRect = _overlayWindow.ScreenPhysicalToLocalDip(item.SourceRect ?? item.TargetRect);
                 _overlayItems.Add(new TextItem
                 {
-                    Text = string.Empty,
-                    X = x,
-                    Y = y,
-                    Width = block.Bounds.Width * scaleX,
-                    MinHeight = minHeight,
+                    Text = item.DebugText ?? string.Empty,
+                    X = sourceRect.X,
+                    Y = sourceRect.Y,
+                    Width = Math.Max(24, sourceRect.Width),
+                    MinHeight = Math.Max(12, sourceRect.Height),
                     FontSize = 1,
                     Background = "#00FFFFFF",
                     BorderBrush = "#FFFF2D2D",
@@ -195,12 +241,12 @@ public partial class MainWindow : Window
 
             _overlayItems.Add(new TextItem
             {
-                Text = block.TranslatedText,
-                X = Math.Max(0, x - OverlayHorizontalPadding),
-                Y = Math.Max(0, y - OverlayVerticalPadding),
-                Width = width + (OverlayHorizontalPadding * 2),
+                Text = item.TranslatedText,
+                X = paddedX,
+                Y = paddedY,
+                Width = Math.Min(width + (OverlayHorizontalPadding * 2), maxWidth),
                 MinHeight = minHeight + (OverlayVerticalPadding * 2),
-                FontSize = Math.Max(16, block.FontSize * scaleY),
+                FontSize = CalculateOverlayFontSize(item, _overlayWindow),
                 Background = "White",
                 BorderBrush = showDebugBoxes ? "#FF0078D4" : "Transparent",
                 Foreground = "Black"
@@ -208,9 +254,12 @@ public partial class MainWindow : Window
         }
     }
 
-    private static double CalculateOverlayTextWidth(TranslatedTextBlock block, double scaleX)
+    private static double CalculateOverlayFontSize(
+        LexVerse.Core.Overlay.OverlayTextItem item,
+        OverlayWindow overlayWindow)
     {
-        return Math.Clamp(block.Bounds.Width * scaleX, 80, 720);
+        var fontRect = overlayWindow.ScreenPhysicalToLocalDip(new(0, 0, 1, Math.Max(1, item.FontSize)));
+        return Math.Clamp(fontRect.Height, 12, 28);
     }
 
     private RealtimeTranslationOptions CreateOptions()
@@ -226,6 +275,103 @@ public partial class MainWindow : Window
 
         return baseOptions with { TargetLanguage = TargetLanguageBox.Text.Trim() };
     }
+
+    private static CaptureBinding CreateCaptureBinding(GraphicsCaptureItem item)
+    {
+        var candidates = new Win32WindowEnumerator().EnumerateWindows();
+        var best = candidates
+            .Select(candidate => new
+            {
+                Candidate = candidate,
+                Score = ScoreWindowCandidate(candidate, item)
+            })
+            .Where(match => match.Score >= 0)
+            .OrderByDescending(match => match.Score)
+            .FirstOrDefault();
+
+        if (best is null)
+        {
+            return new CaptureBinding(
+                null,
+                new CaptureSourceInfo(CaptureSourceKind.Picker, item.DisplayName),
+                "Could not infer screen bounds; overlay may be offset.");
+        }
+
+        var hwnd = best.Candidate.Hwnd;
+        var tracker = new Win32WindowTracker();
+        Func<PixelSize, FrameGeometry> geometryProvider = frameSize =>
+        {
+            var snapshot = tracker.GetSnapshot(hwnd);
+            var sourceRect = ChooseSourceRect(frameSize, snapshot.WindowRect, snapshot.ClientRect);
+            return new FrameGeometry(
+                frameSize,
+                sourceRect,
+                CoordinateSpace.FrameLocal,
+                snapshot.Dpi.ScaleX,
+                snapshot.Dpi.ScaleY,
+                snapshot.Version);
+        };
+
+        return new CaptureBinding(
+            geometryProvider,
+            new CaptureSourceInfo(CaptureSourceKind.Picker, item.DisplayName, hwnd),
+            $"Using window bounds from {best.Candidate.ProcessName ?? "unknown"}.");
+    }
+
+    private static double ScoreWindowCandidate(
+        LexVerse.Core.Windows.WindowCandidate candidate,
+        GraphicsCaptureItem item)
+    {
+        var titleScore = 0;
+        if (candidate.Title.Equals(item.DisplayName, StringComparison.OrdinalIgnoreCase))
+        {
+            titleScore = 1000;
+        }
+        else if (candidate.Title.Contains(item.DisplayName, StringComparison.OrdinalIgnoreCase)
+                 || item.DisplayName.Contains(candidate.Title, StringComparison.OrdinalIgnoreCase))
+        {
+            titleScore = 500;
+        }
+
+        var sizeDelta = ClosestSizeDelta(
+            new PixelSize(item.Size.Width, item.Size.Height),
+            candidate.WindowRect,
+            candidate.ClientRect);
+
+        var score = titleScore - (sizeDelta / 10.0);
+        return score > -80 ? score : -1;
+    }
+
+    private static ScreenRect ChooseSourceRect(
+        PixelSize frameSize,
+        ScreenRect windowRect,
+        ScreenRect clientRect)
+    {
+        return SizeDelta(frameSize, clientRect) <= SizeDelta(frameSize, windowRect)
+            ? clientRect
+            : windowRect;
+    }
+
+    private static double ClosestSizeDelta(
+        PixelSize frameSize,
+        ScreenRect windowRect,
+        ScreenRect? clientRect)
+    {
+        var windowDelta = SizeDelta(frameSize, windowRect);
+        return clientRect is null
+            ? windowDelta
+            : Math.Min(windowDelta, SizeDelta(frameSize, clientRect.Value));
+    }
+
+    private static double SizeDelta(PixelSize frameSize, ScreenRect rect)
+    {
+        return Math.Abs(rect.Width - frameSize.Width) + Math.Abs(rect.Height - frameSize.Height);
+    }
+
+    private sealed record CaptureBinding(
+        Func<PixelSize, FrameGeometry>? GeometryProvider,
+        CaptureSourceInfo SourceInfo,
+        string Status);
 
     private static IOcrRegionProvider? CreateRegionProvider(RealtimeTranslationOptions options)
     {
