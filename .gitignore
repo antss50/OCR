@@ -58,6 +58,7 @@ coverage.*
 project.lock.json
 project.fragment.lock.json
 artifacts/
+artifacts/ocr-debug/
 
 # Publish output
 [Pp]ublish/

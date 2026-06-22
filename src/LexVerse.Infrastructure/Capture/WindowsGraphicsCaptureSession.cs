@@ -78,12 +78,12 @@ public sealed class WindowsGraphicsCaptureSession : IScreenCaptureSession
         return ValueTask.CompletedTask;
     }
 
-    private Task<Direct3D11CaptureFrame> WaitForFrameAsync(CancellationToken cancellationToken)
+    private async Task<Direct3D11CaptureFrame> WaitForFrameAsync(CancellationToken cancellationToken)
     {
         var latestFrame = TryGetLatestFrame(_framePool);
         if (latestFrame is not null)
         {
-            return Task.FromResult(latestFrame);
+            return latestFrame;
         }
 
         var completion = new TaskCompletionSource<Direct3D11CaptureFrame>(
@@ -103,16 +103,22 @@ public sealed class WindowsGraphicsCaptureSession : IScreenCaptureSession
 
         _framePool.FrameArrived += OnFrameArrived;
 
-        if (cancellationToken.CanBeCanceled)
-        {
-            cancellationToken.Register(() =>
+        using var cancellationRegistration = cancellationToken.CanBeCanceled
+            ? cancellationToken.Register(() =>
             {
                 _framePool.FrameArrived -= OnFrameArrived;
                 completion.TrySetCanceled(cancellationToken);
-            });
-        }
+            })
+            : default;
 
-        return completion.Task;
+        try
+        {
+            return await completion.Task;
+        }
+        finally
+        {
+            _framePool.FrameArrived -= OnFrameArrived;
+        }
     }
 
     private static Direct3D11CaptureFrame? TryGetLatestFrame(Direct3D11CaptureFramePool framePool)

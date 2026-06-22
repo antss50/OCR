@@ -35,10 +35,18 @@
                 <Button x:Name="StopButton"
                         MinWidth="88"
                         Height="36"
+                        Margin="0,0,8,0"
                         Padding="14,0"
                         Click="StopButton_Click"
                         IsEnabled="False"
                         Content="Stop" />
+                <Button x:Name="DebugCaptureButton"
+                        MinWidth="124"
+                        Height="36"
+                        Padding="14,0"
+                        Click="DebugCaptureButton_Click"
+                        IsEnabled="False"
+                        Content="Debug capture" />
             </StackPanel>
 
             <StackPanel>
@@ -132,8 +140,9 @@
                              Grid.Row="4"
                              Margin="0,8,0,0"
                              BorderBrush="#E5E7EB"
-                             ScrollViewer.CanContentScroll="True"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             HorizontalContentAlignment="Left"
+                             ScrollViewer.CanContentScroll="False"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
                              ScrollViewer.VerticalScrollBarVisibility="Visible" />
                 </Grid>
             </Border>
