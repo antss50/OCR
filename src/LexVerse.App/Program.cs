@@ -1,10 +1,10 @@
-namespace LexVerse.App
+namespace LexVerse.App;
+
+internal static class Program
 {
-    internal class Program
+    private static void Main()
     {
-        private static void Main(string[] args)
-        {
-            Console.WriteLine("LexVerse.App started.");
-        }
+        Console.WriteLine("LexVerse.App shell.");
+        Console.WriteLine("Run samples/LexVerse.Pipeline.Sample to test the realtime OCR -> translation -> overlay pipeline.");
     }
 }

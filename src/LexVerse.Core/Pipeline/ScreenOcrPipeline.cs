@@ -50,55 +50,12 @@ public sealed class ScreenOcrPipeline
             return await _ocrService.RecognizeAsync(frame, cancellationToken);
         }
 
-        var results = new List<OcrResult>();
-        foreach (var region in regions)
-        {
-            var croppedFrame = CapturedFrameCropper.Crop(frame, region.X, region.Y, region.Width, region.Height);
-            var regionResult = await _ocrService.RecognizeAsync(croppedFrame, cancellationToken);
-            results.Add(OffsetResult(regionResult, region.X, region.Y));
-        }
+        var maskedFrame = CapturedFrameRegionMasker.KeepRegions(
+            frame,
+            regions
+                .Select(region => new RegionBounds(region.X, region.Y, region.Width, region.Height))
+                .ToArray());
 
-        return MergeResults(results);
-    }
-
-    private static OcrResult OffsetResult(OcrResult result, int offsetX, int offsetY)
-    {
-        var blocks = result.Blocks
-            .Select(block =>
-            {
-                var words = block.Words
-                    .Select(word => word with { Bounds = OffsetBounds(word.Bounds, offsetX, offsetY) })
-                    .ToArray();
-
-                return block with
-                {
-                    Bounds = OffsetBounds(block.Bounds, offsetX, offsetY),
-                    Words = words
-                };
-            })
-            .ToArray();
-
-        return result with { Blocks = blocks };
-    }
-
-    private static OcrResult MergeResults(IReadOnlyList<OcrResult> results)
-    {
-        var blocks = results
-            .SelectMany(result => result.Blocks)
-            .OrderBy(block => block.Bounds.Y)
-            .ThenBy(block => block.Bounds.X)
-            .ToArray();
-
-        var firstResult = results[0];
-        return firstResult with
-        {
-            Blocks = blocks,
-            RecognizedAt = DateTimeOffset.UtcNow
-        };
-    }
-
-    private static BoundingBox OffsetBounds(BoundingBox bounds, int offsetX, int offsetY)
-    {
-        return new BoundingBox(bounds.X + offsetX, bounds.Y + offsetY, bounds.Width, bounds.Height);
+        return await _ocrService.RecognizeAsync(maskedFrame, cancellationToken);
     }
 }

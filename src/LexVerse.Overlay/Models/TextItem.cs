@@ -8,7 +8,12 @@ namespace LexVerse.Overlay.Models
         private string _text = string.Empty;
         private double _x;
         private double _y;
+        private double _width = double.NaN;
+        private double _minHeight;
         private double _fontSize = 20;
+        private string _background = "White";
+        private string _borderBrush = "Transparent";
+        private string _foreground = "Black";
 
         public string Text
         {
@@ -28,10 +33,40 @@ namespace LexVerse.Overlay.Models
             set => SetField(ref _y, value);
         }
 
+        public double Width
+        {
+            get => _width;
+            set => SetField(ref _width, value);
+        }
+
+        public double MinHeight
+        {
+            get => _minHeight;
+            set => SetField(ref _minHeight, value);
+        }
+
         public double FontSize
         {
             get => _fontSize;
             set => SetField(ref _fontSize, value);
+        }
+
+        public string Background
+        {
+            get => _background;
+            set => SetField(ref _background, value);
+        }
+
+        public string BorderBrush
+        {
+            get => _borderBrush;
+            set => SetField(ref _borderBrush, value);
+        }
+
+        public string Foreground
+        {
+            get => _foreground;
+            set => SetField(ref _foreground, value);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

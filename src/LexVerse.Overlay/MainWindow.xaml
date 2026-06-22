@@ -12,6 +12,8 @@
         Topmost="True"
         ShowInTaskbar="False"
         ResizeMode="NoResize"
+        SnapsToDevicePixels="True"
+        UseLayoutRounding="True"
         Loaded="Window_Loaded"
         Height="600"
         Width="800">
@@ -20,15 +22,26 @@
         <ItemsControl ItemsSource="{Binding Items}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <Canvas IsHitTestVisible="False"/>
+                    <Canvas IsHitTestVisible="False"
+                            SnapsToDevicePixels="True"/>
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                    <TextBlock Text="{Binding Text}"
-                            FontSize="{Binding FontSize}"
-                            Foreground="White"
-                            FontWeight="Bold"/>
+                    <Border Width="{Binding Width}"
+                            MinHeight="{Binding MinHeight}"
+                            Padding="4,2"
+                            Background="{Binding Background}"
+                            BorderBrush="{Binding BorderBrush}"
+                            BorderThickness="1">
+                        <TextBlock Text="{Binding Text}"
+                                   FontSize="{Binding FontSize}"
+                                   Foreground="{Binding Foreground}"
+                                   FontWeight="SemiBold"
+                                   LineStackingStrategy="BlockLineHeight"
+                                   LineHeight="{Binding FontSize}"
+                                   TextWrapping="Wrap"/>
+                    </Border>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
             <ItemsControl.ItemContainerStyle>
