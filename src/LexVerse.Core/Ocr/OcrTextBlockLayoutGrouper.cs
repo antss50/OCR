@@ -6,25 +6,28 @@ namespace LexVerse.Core.Ocr;
 public sealed class OcrTextBlockLayoutGrouper
 {
     private const double IndentFactor = 1.6;
+    private const double LargeVerticalGapFactor = 1.55;
     private const double MergeScoreThreshold = 0.74;
+    private const double MinimumLargeVerticalGap = 26;
     private const double MinimumHorizontalSplitGap = 22;
+    private const double DocumentParagraphMergeScore = 0.62;
     private static readonly Regex BulletOrNumberedItemRegex = new("^\\s*(?:[\\u2022\\-*]|[0-9]+[.)])\\s+", RegexOptions.Compiled);
     private static readonly Regex DashSeparatedListItemRegex = new("^\\s*\\S+(?:\\s+\\S+){0,4}\\s+(?:[-\\u2013\\u2014])\\s+\\S+", RegexOptions.Compiled);
+    private static readonly Regex EllipsisListItemRegex = new("^\\s*(?:\\.\\.\\.|\\u2026)\\s+\\S+", RegexOptions.Compiled);
+    private static readonly Regex SectionHeadingRegex = new("^\\s*(?:[0-9]+\\.)+[0-9]+\\s+\\S+", RegexOptions.Compiled);
 
     public IReadOnlyList<OcrTextBlock> GroupLines(IEnumerable<OcrTextBlock> lineBlocks)
     {
         ArgumentNullException.ThrowIfNull(lineBlocks);
 
-        var rawLines = lineBlocks
+        var lines = lineBlocks
             .Where(line => !string.IsNullOrWhiteSpace(line.Text) && line.Bounds.Width > 0 && line.Bounds.Height > 0)
             .ToArray();
-        var proximityLines = rawLines
-            .SelectMany(SplitLineByHorizontalProximity)
-            .ToArray();
-        var gutters = DetectRepeatedVerticalGutters(proximityLines);
-        var lines = SplitLinesByGutters(proximityLines, gutters)
-            .SelectMany(SplitLineByHorizontalProximity)
-            .ToArray();
+        var gutters = DetectRepeatedVerticalGutters(lines);
+        if (gutters.Length > 0)
+        {
+            lines = SplitLinesByGutters(lines, gutters).ToArray();
+        }
 
         if (lines.Length <= 1)
         {
@@ -88,6 +91,7 @@ public sealed class OcrTextBlockLayoutGrouper
         var rows = BuildRows(lines, rowTolerance);
         var candidates = new List<DetectedGutter>();
         var minimumGap = Math.Max(MinimumHorizontalSplitGap, medianLineHeight * 1.35);
+        var rowsWithHorizontalSplits = 0;
 
         foreach (var row in rows)
         {
@@ -95,6 +99,7 @@ public sealed class OcrTextBlockLayoutGrouper
                 .OrderBy(line => line.Bounds.X)
                 .ToArray();
 
+            var rowHasHorizontalSplit = false;
             for (var index = 1; index < rowLines.Length; index++)
             {
                 var left = rowLines[index - 1];
@@ -106,7 +111,13 @@ public sealed class OcrTextBlockLayoutGrouper
                     continue;
                 }
 
+                rowHasHorizontalSplit = true;
                 candidates.Add(new DetectedGutter(left.Bounds.Right, right.Bounds.X, 1));
+            }
+
+            if (rowHasHorizontalSplit)
+            {
+                rowsWithHorizontalSplits++;
             }
         }
 
@@ -115,6 +126,7 @@ public sealed class OcrTextBlockLayoutGrouper
             return [];
         }
 
+        var minimumVotes = Math.Max(2, (int)Math.Ceiling(rowsWithHorizontalSplits * 0.45));
         var clusterTolerance = Math.Max(28, medianLineHeight * 1.8);
         var clusters = new List<DetectedGutterCluster>();
         foreach (var candidate in candidates.OrderBy(gutter => gutter.Center))
@@ -134,10 +146,31 @@ public sealed class OcrTextBlockLayoutGrouper
         }
 
         return clusters
-            .Where(cluster => cluster.Votes >= 2)
+            .Where(cluster => cluster.Votes >= minimumVotes)
             .Select(cluster => cluster.ToGutter())
+            .Where(gutter => HasTextOnBothSides(lines, gutter))
             .OrderBy(gutter => gutter.Center)
             .ToArray();
+    }
+
+    private static bool HasTextOnBothSides(IReadOnlyList<OcrTextBlock> lines, DetectedGutter gutter)
+    {
+        var leftCount = 0;
+        var rightCount = 0;
+
+        foreach (var line in lines)
+        {
+            if (line.Bounds.Right <= gutter.Left)
+            {
+                leftCount++;
+            }
+            else if (line.Bounds.X >= gutter.Right)
+            {
+                rightCount++;
+            }
+        }
+
+        return leftCount >= 2 && rightCount >= 2;
     }
 
     private static IReadOnlyList<LayoutRow> BuildRows(IReadOnlyList<OcrTextBlock> lines, double rowTolerance)
@@ -190,7 +223,7 @@ public sealed class OcrTextBlockLayoutGrouper
             var currentWord = orderedWords[index];
             var gap = currentWord.Bounds.X - previousWord.Bounds.Right;
 
-            if (gap > splitGap)
+            if (gap > splitGap && IsMeaningfulHorizontalSplit(currentWords, orderedWords, index, gap, medianFontSize))
             {
                 splitLines.Add(ToTextBlock(currentWords));
                 currentWords.Clear();
@@ -357,13 +390,28 @@ public sealed class OcrTextBlockLayoutGrouper
         OcrTextBlock currentBlockFirstLine,
         double medianLineHeight)
     {
-        if (IsBulletOrNumberedItem(currentLine.Text))
+        if (IsListItemStart(currentLine.Text))
         {
             return true;
         }
 
         var verticalGap = currentLine.Bounds.Y - previousLine.Bounds.Bottom;
+        if (verticalGap < 0)
+        {
+            return true;
+        }
+
+        if (LooksLikeFormulaOrEquationLine(previousLine) || LooksLikeFormulaOrEquationLine(currentLine))
+        {
+            return true;
+        }
+
         if (LooksLikeDashSeparatedListItem(currentLine.Text))
+        {
+            return true;
+        }
+
+        if (IsLargeVerticalGap(verticalGap, medianLineHeight))
         {
             return true;
         }
@@ -373,8 +421,23 @@ public sealed class OcrTextBlockLayoutGrouper
             return true;
         }
 
+        if (LooksLikeTextWrappingAroundMedia(previousLine, currentLine, currentBlockFirstLine, medianLineHeight))
+        {
+            return true;
+        }
+
+        if (LooksLikeSectionHeading(previousLine) && !LooksLikeSectionHeading(currentLine))
+        {
+            return true;
+        }
+
+        if (LooksLikeDocumentParagraphContinuation(previousLine, currentLine, currentBlockFirstLine, verticalGap, medianLineHeight))
+        {
+            return false;
+        }
+
         var indentDelta = currentLine.Bounds.X - currentBlockFirstLine.Bounds.X;
-        if (!IsBulletOrNumberedItem(currentBlockFirstLine.Text) &&
+        if (!IsListItemStart(currentBlockFirstLine.Text) &&
             Math.Abs(indentDelta) > Math.Max(14, medianLineHeight * IndentFactor) &&
             EndsLikeParagraph(previousLine.Text))
         {
@@ -383,6 +446,99 @@ public sealed class OcrTextBlockLayoutGrouper
 
         var mergeScore = CalculateMergeScore(previousLine, currentLine, currentBlockFirstLine, verticalGap, medianLineHeight);
         return mergeScore < MergeScoreThreshold;
+    }
+
+    private static bool IsLargeVerticalGap(int verticalGap, double medianLineHeight)
+    {
+        return verticalGap > Math.Max(MinimumLargeVerticalGap, medianLineHeight * LargeVerticalGapFactor);
+    }
+
+    private static bool LooksLikeDocumentParagraphContinuation(
+        OcrTextBlock previousLine,
+        OcrTextBlock currentLine,
+        OcrTextBlock currentBlockFirstLine,
+        int verticalGap,
+        double medianLineHeight)
+    {
+        if (verticalGap < 0 || verticalGap > Math.Max(18, medianLineHeight * 1.15))
+        {
+            return false;
+        }
+
+        if (LooksLikeStandaloneHeading(previousLine, verticalGap, medianLineHeight) ||
+            LooksLikeStandaloneHeading(currentLine, verticalGap, medianLineHeight))
+        {
+            return false;
+        }
+
+        if (!AreFontSizesSimilar(previousLine.FontSize, currentLine.FontSize))
+        {
+            return false;
+        }
+
+        var hasColumnOverlap = HorizontalOverlapRatio(previousLine.Bounds, currentLine.Bounds) >= 0.28 ||
+            HorizontalOverlapRatio(currentBlockFirstLine.Bounds, currentLine.Bounds) >= 0.28;
+        var leftAligned = Math.Abs(currentLine.Bounds.X - previousLine.Bounds.X) <= Math.Max(20, medianLineHeight * 1.25) ||
+            Math.Abs(currentLine.Bounds.X - currentBlockFirstLine.Bounds.X) <= Math.Max(20, medianLineHeight * 1.25);
+        if (!hasColumnOverlap && !leftAligned)
+        {
+            return false;
+        }
+
+        var previousLooksLikeProse = LooksLikeProseLine(previousLine, medianLineHeight);
+        var currentLooksLikeProse = LooksLikeProseLine(currentLine, medianLineHeight);
+        if (!previousLooksLikeProse || !currentLooksLikeProse)
+        {
+            return false;
+        }
+
+        var mergeScore = CalculateDocumentParagraphScore(previousLine, currentLine, currentBlockFirstLine, verticalGap, medianLineHeight);
+        return mergeScore >= DocumentParagraphMergeScore;
+    }
+
+    private static double CalculateDocumentParagraphScore(
+        OcrTextBlock previousLine,
+        OcrTextBlock currentLine,
+        OcrTextBlock currentBlockFirstLine,
+        int verticalGap,
+        double medianLineHeight)
+    {
+        var score = CalculateVerticalProximityScore(verticalGap, medianLineHeight);
+
+        if (AreFontSizesSimilar(previousLine.FontSize, currentLine.FontSize))
+        {
+            score += 0.18;
+        }
+
+        if (HorizontalOverlapRatio(previousLine.Bounds, currentLine.Bounds) >= 0.55)
+        {
+            score += 0.18;
+        }
+
+        if (Math.Abs(currentLine.Bounds.X - currentBlockFirstLine.Bounds.X) <= Math.Max(22, medianLineHeight * 1.35) ||
+            Math.Abs(currentLine.Bounds.X - previousLine.Bounds.X) <= Math.Max(22, medianLineHeight * 1.35))
+        {
+            score += 0.18;
+        }
+
+        if (!EndsLikeHardSentenceBoundary(previousLine.Text) ||
+            EndsWithSoftWrapCue(previousLine.Text) ||
+            StartsLikeParagraphContinuation(currentLine.Text))
+        {
+            score += 0.20;
+        }
+
+        if (BothLookLikeParagraphLines(previousLine, currentLine, medianLineHeight))
+        {
+            score += 0.10;
+        }
+
+        if (EndsLikeHardSentenceBoundary(previousLine.Text) && StartsLikeNewSentence(currentLine.Text))
+        {
+            score -= 0.12;
+        }
+
+        return Math.Clamp(score, 0, 1);
     }
 
     private static OcrTextBlock MergeLines(IReadOnlyList<OcrTextBlock> lines)
@@ -443,9 +599,90 @@ public sealed class OcrTextBlockLayoutGrouper
         return BulletOrNumberedItemRegex.IsMatch(text);
     }
 
+    private static bool IsListItemStart(string text)
+    {
+        return IsBulletOrNumberedItem(text) || EllipsisListItemRegex.IsMatch(text);
+    }
+
     private static bool LooksLikeDashSeparatedListItem(string text)
     {
         return DashSeparatedListItemRegex.IsMatch(text);
+    }
+
+    private static bool LooksLikeSectionHeading(OcrTextBlock line)
+    {
+        return SectionHeadingRegex.IsMatch(line.Text) ||
+            (CountWords(line.Text) <= 7 && !EndsLikeParagraph(line.Text) && HasTitleCaseSignal(line.Text));
+    }
+
+    private static bool LooksLikeFormulaOrEquationLine(OcrTextBlock line)
+    {
+        var text = line.Text.Trim();
+        if (text.Length == 0)
+        {
+            return true;
+        }
+
+        var letters = text.Count(char.IsLetter);
+        var digits = text.Count(char.IsDigit);
+        var mathSymbols = text.Count(character => character is '=' or '+' or '-' or '/' or '\\' or '^' or '_' or '∑' or 'Σ' or '∆' or 'Δ' or 'δ' or '≈' or '≤' or '≥' or '∥' or '‖');
+        var bracketSymbols = text.Count(character => character is '(' or ')' or '[' or ']' or '{' or '}');
+        var nonSpace = text.Count(character => !char.IsWhiteSpace(character));
+        if (nonSpace == 0)
+        {
+            return true;
+        }
+
+        var wordCount = CountWords(text);
+        var symbolRatio = (mathSymbols + bracketSymbols) / (double)nonSpace;
+        var hasEquationCue = text.Contains('=') || text.Contains('≈') || text.Contains('∑') || text.Contains('Σ') || text.Contains("||", StringComparison.Ordinal);
+        var looksLikeEquationNumber = wordCount <= 2 && digits > 0 && bracketSymbols >= 2;
+
+        return looksLikeEquationNumber ||
+            (hasEquationCue && symbolRatio >= 0.14 && letters <= Math.Max(10, digits + mathSymbols + bracketSymbols)) ||
+            (wordCount <= 4 && symbolRatio >= 0.32 && mathSymbols > 0);
+    }
+
+    private static bool LooksLikeProseLine(OcrTextBlock line, double medianLineHeight)
+    {
+        var text = line.Text.Trim();
+        if (text.Length == 0 || LooksLikeFormulaOrEquationLine(line))
+        {
+            return false;
+        }
+
+        var wordCount = CountWords(text);
+        if (wordCount < 4)
+        {
+            return false;
+        }
+
+        var letters = text.Count(char.IsLetter);
+        var nonSpace = text.Count(character => !char.IsWhiteSpace(character));
+        if (nonSpace == 0 || letters / (double)nonSpace < 0.48)
+        {
+            return false;
+        }
+
+        return line.Bounds.Width >= Math.Max(150, medianLineHeight * 7);
+    }
+
+    private static bool StartsLikeNewSentence(string text)
+    {
+        var trimmed = text.TrimStart();
+        return trimmed.Length > 0 && char.IsUpper(trimmed[0]);
+    }
+
+    private static bool HasTitleCaseSignal(string text)
+    {
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length == 0)
+        {
+            return false;
+        }
+
+        var titleWords = words.Count(word => word.Length > 0 && char.IsUpper(word[0]));
+        return titleWords >= Math.Max(1, words.Length - 1);
     }
 
     private static bool LooksLikeTitleDescriptionPair(
@@ -583,6 +820,33 @@ public sealed class OcrTextBlockLayoutGrouper
             : Math.Max(MinimumHorizontalSplitGap, medianFontSize * 1.55);
     }
 
+    private static bool IsMeaningfulHorizontalSplit(
+        IReadOnlyList<OcrWord> currentWords,
+        IReadOnlyList<OcrWord> orderedWords,
+        int splitIndex,
+        int gap,
+        double medianFontSize)
+    {
+        var leftWordCount = currentWords.Count;
+        var rightWordCount = orderedWords.Count - splitIndex;
+        if (leftWordCount == 0 || rightWordCount == 0)
+        {
+            return false;
+        }
+
+        if (Math.Min(leftWordCount, rightWordCount) >= 3)
+        {
+            return true;
+        }
+
+        if (Math.Max(leftWordCount, rightWordCount) >= 4)
+        {
+            return gap >= Math.Max(42, medianFontSize * 2.6);
+        }
+
+        return gap >= Math.Max(72, medianFontSize * 4.5);
+    }
+
     private static bool AreHorizontallyDetached(
         OcrTextBlock previousLine,
         OcrTextBlock currentLine,
@@ -607,6 +871,24 @@ public sealed class OcrTextBlockLayoutGrouper
         var minimumDetachedGap = Math.Max(MinimumHorizontalSplitGap, medianLineHeight * 1.4);
 
         return Math.Min(gapFromPrevious, gapFromBlock) >= minimumDetachedGap;
+    }
+
+    private static bool LooksLikeTextWrappingAroundMedia(
+        OcrTextBlock previousLine,
+        OcrTextBlock currentLine,
+        OcrTextBlock currentBlockFirstLine,
+        double medianLineHeight)
+    {
+        var outdent = currentBlockFirstLine.Bounds.X - currentLine.Bounds.X;
+        if (outdent <= Math.Max(28, medianLineHeight * 2.0))
+        {
+            return false;
+        }
+
+        var currentReachesFurtherLeft = currentLine.Bounds.X < previousLine.Bounds.X - Math.Max(18, medianLineHeight * 1.2);
+        var currentIsMuchWider = currentLine.Bounds.Width >= previousLine.Bounds.Width * 1.18;
+
+        return currentReachesFurtherLeft && currentIsMuchWider;
     }
 
     private static bool AreFontSizesSimilar(double previousFontSize, double currentFontSize)

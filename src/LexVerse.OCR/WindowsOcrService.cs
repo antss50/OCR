@@ -23,6 +23,12 @@ public sealed class WindowsOcrService : IOcrService
 
     public async Task<LexVerse.Core.Ocr.OcrResult> RecognizeAsync(CapturedFrame frame, CancellationToken cancellationToken = default)
     {
+        var debugResult = await RecognizeWithLayoutDebugAsync(frame, cancellationToken);
+        return debugResult.Result;
+    }
+
+    public async Task<OcrLayoutDebugResult> RecognizeWithLayoutDebugAsync(CapturedFrame frame, CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(frame);
 
         if (frame.PixelFormat != PixelFormat.Bgra8)
@@ -52,15 +58,17 @@ public sealed class WindowsOcrService : IOcrService
             .Select(ToWord)
             .ToArray();
         var lineBlocks = BuildVisualTextBlocks(recognizedWords)
-            .Where(block => EnglishOcrTextFilter.IsLikelyEnglish(block.Text))
+            .Where(EnglishOcrTextFilter.IsLikelyTextBlock)
             .ToArray();
         var blocks = _layoutGrouper.GroupLines(lineBlocks);
 
-        return new LexVerse.Core.Ocr.OcrResult(
+        var ocrResult = new LexVerse.Core.Ocr.OcrResult(
             blocks,
             _engine.RecognizerLanguage.LanguageTag,
             result.TextAngle ?? 0,
             DateTimeOffset.UtcNow);
+
+        return new OcrLayoutDebugResult(lineBlocks, ocrResult);
     }
 
     private static OcrEngine CreateEngine(string? languageTag)
@@ -155,7 +163,7 @@ public sealed class WindowsOcrService : IOcrService
             var currentWord = orderedWords[index];
             var gap = currentWord.Bounds.X - previousWord.Bounds.Right;
 
-            if (gap > columnGapThreshold && HasEnoughWordsAfterSplit(currentLine, orderedWords, index))
+            if (gap > columnGapThreshold && IsMeaningfulHorizontalSplit(currentLine, orderedWords, index, gap, medianWordHeight))
             {
                 visualLines.Add(currentLine.ToArray());
                 currentLine.Clear();
@@ -172,12 +180,31 @@ public sealed class WindowsOcrService : IOcrService
         return visualLines;
     }
 
-    private static bool HasEnoughWordsAfterSplit(
+    private static bool IsMeaningfulHorizontalSplit(
         IReadOnlyList<CoreOcrWord> currentLine,
         IReadOnlyList<CoreOcrWord> orderedWords,
-        int splitIndex)
+        int splitIndex,
+        int gap,
+        double medianWordHeight)
     {
-        return currentLine.Count >= 1 && orderedWords.Count - splitIndex >= 1;
+        var leftWordCount = currentLine.Count;
+        var rightWordCount = orderedWords.Count - splitIndex;
+        if (leftWordCount == 0 || rightWordCount == 0)
+        {
+            return false;
+        }
+
+        if (Math.Min(leftWordCount, rightWordCount) >= 3)
+        {
+            return true;
+        }
+
+        if (Math.Max(leftWordCount, rightWordCount) >= 4)
+        {
+            return gap >= Math.Max(42, medianWordHeight * 2.6);
+        }
+
+        return gap >= Math.Max(72, medianWordHeight * 4.5);
     }
 
     private static OcrTextBlock ToTextBlock(IReadOnlyList<CoreOcrWord> words)
@@ -292,6 +319,11 @@ internal static class EnglishOcrTextFilter
         "àáảãạăằắẳẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ" +
         "ÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬĐÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸỴ";
 
+    public static bool IsLikelyTextBlock(OcrTextBlock block)
+    {
+        return IsLikelyEnglish(block.Text) && !LooksLikeVisualNoise(block.Text);
+    }
+
     public static bool IsLikelyEnglish(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -327,5 +359,38 @@ internal static class EnglishOcrTextFilter
         }
 
         return asciiLetters / (double)letters >= 0.9;
+    }
+
+    private static bool LooksLikeVisualNoise(string text)
+    {
+        var letters = text.Where(char.IsLetter).ToArray();
+        if (letters.Length == 0)
+        {
+            return true;
+        }
+
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (letters.Length == 1)
+        {
+            return true;
+        }
+
+        var normalizedLetters = letters
+            .Select(char.ToUpperInvariant)
+            .ToArray();
+        var distinctLetters = normalizedLetters.Distinct().Count();
+        var vowelCount = normalizedLetters.Count(character => character is 'A' or 'E' or 'I' or 'O' or 'U');
+
+        if (distinctLetters <= 1 && letters.Length <= 8)
+        {
+            return true;
+        }
+
+        if (words.Length >= 2 && distinctLetters <= 2 && vowelCount == letters.Length)
+        {
+            return true;
+        }
+
+        return false;
     }
 }

@@ -37,18 +37,21 @@ public partial class MainWindow : Window
             {
                 SourceText.Text = "No capture source selected.";
                 StartButton.IsEnabled = false;
+                DebugCaptureButton.IsEnabled = false;
                 StatusText.Text = "Selection canceled.";
                 return;
             }
 
             SourceText.Text = $"Selected: {_captureItem.DisplayName}";
             StartButton.IsEnabled = true;
+            DebugCaptureButton.IsEnabled = true;
             StatusText.Text = "Source selected. Press Start to begin OCR.";
         }
         catch (Exception ex)
         {
             StatusText.Text = $"Could not choose capture source: {ex.Message}";
             StartButton.IsEnabled = false;
+            DebugCaptureButton.IsEnabled = false;
         }
     }
 
@@ -71,6 +74,7 @@ public partial class MainWindow : Window
             PickButton.IsEnabled = false;
             StartButton.IsEnabled = false;
             StopButton.IsEnabled = true;
+            DebugCaptureButton.IsEnabled = true;
             StatusText.Text = "OCR running.";
 
             _ = RunCaptureLoopAsync(_captureLoopCancellation.Token);
@@ -81,6 +85,7 @@ public partial class MainWindow : Window
             PickButton.IsEnabled = true;
             StartButton.IsEnabled = true;
             StopButton.IsEnabled = false;
+            DebugCaptureButton.IsEnabled = _captureItem is not null;
         }
     }
 
@@ -92,7 +97,55 @@ public partial class MainWindow : Window
         PickButton.IsEnabled = true;
         StartButton.IsEnabled = _captureItem is not null;
         StopButton.IsEnabled = false;
+        DebugCaptureButton.IsEnabled = _captureItem is not null;
         StatusText.Text = "Stopped.";
+    }
+
+    private async void DebugCaptureButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_captureItem is null)
+        {
+            StatusText.Text = "Choose a capture source first.";
+            return;
+        }
+
+        DebugCaptureButton.IsEnabled = false;
+        StatusText.Text = "Capturing OCR debug snapshot.";
+
+        try
+        {
+            var captureSession = _captureSession;
+            var disposeAfterCapture = false;
+
+            if (captureSession is null)
+            {
+                captureSession = WindowsGraphicsCaptureSession.Create(_captureItem);
+                disposeAfterCapture = true;
+            }
+
+            try
+            {
+                var frame = await captureSession.CaptureFrameAsync();
+                var debugResult = await new WindowsOcrService("en-US").RecognizeWithLayoutDebugAsync(frame);
+                var directory = OcrDebugSnapshotWriter.WriteSnapshot(frame, debugResult);
+                StatusText.Text = $"Debug snapshot saved: {directory}";
+            }
+            finally
+            {
+                if (disposeAfterCapture)
+                {
+                    await captureSession.DisposeAsync();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Could not save debug snapshot: {ex.Message}";
+        }
+        finally
+        {
+            DebugCaptureButton.IsEnabled = _captureItem is not null;
+        }
     }
 
     private async Task RunCaptureLoopAsync(CancellationToken cancellationToken)
