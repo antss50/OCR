@@ -15,6 +15,8 @@ namespace LexVerse.Overlay
 
         public ScreenPoint VirtualScreenOrigin { get; private set; }
 
+        private ScreenRect? _pendingPhysicalBounds;
+
         public MainWindow()
             : this(new ObservableCollection<TextItem>())
         {
@@ -29,23 +31,44 @@ namespace LexVerse.Overlay
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            var virtualLeft = GetSystemMetrics(SM_XVIRTUALSCREEN);
-            var virtualTop = GetSystemMetrics(SM_YVIRTUALSCREEN);
-            var virtualWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-            var virtualHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN);
-            var dpi = VisualTreeHelper.GetDpi(this);
+            if (_pendingPhysicalBounds is { } pendingPhysicalBounds)
+            {
+                SetPhysicalBounds(pendingPhysicalBounds);
+            }
+            else
+            {
+                var virtualLeft = GetSystemMetrics(SM_XVIRTUALSCREEN);
+                var virtualTop = GetSystemMetrics(SM_YVIRTUALSCREEN);
+                var virtualWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+                var virtualHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN);
 
-            VirtualScreenOrigin = new ScreenPoint(virtualLeft, virtualTop);
-            Left = virtualLeft / dpi.DpiScaleX;
-            Top = virtualTop / dpi.DpiScaleY;
-            Width = virtualWidth / dpi.DpiScaleX;
-            Height = virtualHeight / dpi.DpiScaleY;
+                SetPhysicalBounds(new ScreenRect(virtualLeft, virtualTop, virtualWidth, virtualHeight));
+            }
 
             var hwnd = new WindowInteropHelper(this).Handle;
             int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
             exStyle |= WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
             SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
             _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+        }
+
+        public void SetPhysicalBounds(ScreenRect physicalBounds)
+        {
+            physicalBounds.Validate();
+
+            if (!IsLoaded)
+            {
+                _pendingPhysicalBounds = physicalBounds;
+                return;
+            }
+
+            var dpi = VisualTreeHelper.GetDpi(this);
+            VirtualScreenOrigin = new ScreenPoint(physicalBounds.X, physicalBounds.Y);
+            Left = physicalBounds.X / dpi.DpiScaleX;
+            Top = physicalBounds.Y / dpi.DpiScaleY;
+            Width = physicalBounds.Width / dpi.DpiScaleX;
+            Height = physicalBounds.Height / dpi.DpiScaleY;
+            _pendingPhysicalBounds = null;
         }
 
         public Rect ScreenPhysicalToLocalDip(ScreenRect physicalRect)

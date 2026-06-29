@@ -45,7 +45,7 @@
             </Grid.ColumnDefinitions>
 
             <TextBlock VerticalAlignment="Center" Text="Mode"/>
-            <ComboBox x:Name="ModeBox" Grid.Column="1" Margin="8,0,18,0" SelectedIndex="0">
+            <ComboBox x:Name="ModeBox" Grid.Column="1" Margin="8,0,18,0" SelectedIndex="3">
                 <ComboBoxItem Content="fullscreen" Tag="fullscreen"/>
                 <ComboBoxItem Content="subtitle" Tag="subtitle"/>
                 <ComboBoxItem Content="game-dialogue" Tag="game-dialogue"/>

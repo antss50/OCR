@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -28,6 +30,7 @@ public partial class MainWindow : Window
     private Func<PixelSize, FrameGeometry>? _captureGeometryProvider;
     private CaptureSourceInfo? _captureSourceInfo;
     private bool _useMatchedWindowCaptureItem;
+    private readonly Win32WindowTracker _selectedWindowTracker = new();
     private WindowsGraphicsCaptureSession? _captureSession;
     private OverlayWindow? _overlayWindow;
     private CancellationTokenSource? _pipelineCancellation;
@@ -137,6 +140,7 @@ public partial class MainWindow : Window
         {
             try
             {
+                var iterationTimer = Stopwatch.StartNew();
                 var result = await pipeline.CaptureRecognizeAndTranslateAsync(
                     cancellationToken,
                     (partialResult, _) =>
@@ -145,7 +149,7 @@ public partial class MainWindow : Window
                         return Task.CompletedTask;
                     });
                 RenderResult(result, isPartial: false);
-                await Task.Delay(options.OcrInterval, cancellationToken);
+                await DelayUntilNextCaptureAsync(options.OcrInterval, iterationTimer.Elapsed, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -159,6 +163,22 @@ public partial class MainWindow : Window
         }
 
         await Dispatcher.InvokeAsync(async () => await StopPipelineAsync());
+    }
+
+    private static async Task DelayUntilNextCaptureAsync(
+        TimeSpan interval,
+        TimeSpan elapsed,
+        CancellationToken cancellationToken)
+    {
+        var remaining = interval - elapsed;
+        if (remaining > TimeSpan.FromMilliseconds(10))
+        {
+            await Task.Delay(remaining, cancellationToken);
+        }
+        else
+        {
+            await Task.Yield();
+        }
     }
 
     private SessionCaptureItem CreateSessionCaptureItem()
@@ -239,13 +259,25 @@ public partial class MainWindow : Window
 
     private void UpdateOverlay(RealtimeTranslationPipelineResult result)
     {
-        _overlayItems.Clear();
-        var showDebugBoxes = DebugOverlayBox.IsChecked == true;
-
         if (_overlayWindow is null)
         {
             return;
         }
+
+        _overlayItems.Clear();
+        if (!ShouldShowOverlayOnSelectedSource())
+        {
+            _overlayWindow.Hide();
+            return;
+        }
+
+        _overlayWindow.SetPhysicalBounds(result.Ocr.Frame.Geometry.SourceScreenRect);
+        if (!_overlayWindow.IsVisible)
+        {
+            _overlayWindow.Show();
+        }
+
+        var showDebugBoxes = DebugOverlayBox.IsChecked == true;
 
         foreach (var item in result.OverlayFrame.Items)
         {
@@ -288,6 +320,37 @@ public partial class MainWindow : Window
                 Foreground = "Black"
             });
         }
+    }
+
+    private bool ShouldShowOverlayOnSelectedSource()
+    {
+        if (_captureSourceInfo?.Hwnd is not { } hwnd || hwnd == IntPtr.Zero)
+        {
+            return true;
+        }
+
+        try
+        {
+            var snapshot = _selectedWindowTracker.GetSnapshot(hwnd);
+            return snapshot.IsVisible
+                && !snapshot.IsMinimized
+                && IsForegroundWindowOrRoot(hwnd);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsForegroundWindowOrRoot(IntPtr hwnd)
+    {
+        var foreground = GetForegroundWindow();
+        if (foreground == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        return foreground == hwnd || GetAncestor(foreground, GA_ROOT) == hwnd;
     }
 
     private static double CalculateOverlayFontSize(
@@ -464,4 +527,12 @@ public partial class MainWindow : Window
         await StopPipelineAsync();
         base.OnClosed(e);
     }
+
+    private const uint GA_ROOT = 2;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
 }

@@ -1,0 +1,4 @@
+interface:
+  display_name: "LexVerse Project"
+  short_description: "Maintain LexVerse project memory"
+  default_prompt: "Use $lexverse-project to inspect project state before changing LexVerse code."
