@@ -24,6 +24,17 @@ public partial class MainWindow : Window
 {
     private const double OverlayHorizontalPadding = 4;
     private const double OverlayVerticalPadding = 2;
+    private const string LightBlockBackground = "White";
+    private const string LightBlockForeground = "Black";
+    private const string DarkBlockBackground = "Black";
+    private const string DarkBlockForeground = "White";
+    private const double MinBaseOverlayFontSize = 12;
+    private const double MaxBaseOverlayFontSize = 28;
+    private const double MinOverlayFontSize = 8;
+    private const double MaxOverlayFontSize = 44;
+    private const double MinOverlayFontScale = 0.6;
+    private const double MaxOverlayFontScale = 1.8;
+    private const double OverlayFontScaleStep = 0.1;
 
     private readonly ObservableCollection<TextItem> _overlayItems = [];
     private GraphicsCaptureItem? _captureItem;
@@ -34,10 +45,13 @@ public partial class MainWindow : Window
     private WindowsGraphicsCaptureSession? _captureSession;
     private OverlayWindow? _overlayWindow;
     private CancellationTokenSource? _pipelineCancellation;
+    private RealtimeTranslationPipelineResult? _lastOverlayResult;
+    private double _overlayFontScale = 1;
 
     public MainWindow()
     {
         InitializeComponent();
+        UpdateFontSizeControls();
     }
 
     private async void PickButton_Click(object sender, RoutedEventArgs e)
@@ -117,6 +131,42 @@ public partial class MainWindow : Window
     {
         await StopPipelineAsync();
         StatusText.Text = "Stopped.";
+    }
+
+    private void DecreaseFontSizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        AdjustOverlayFontScale(-OverlayFontScaleStep);
+    }
+
+    private void IncreaseFontSizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        AdjustOverlayFontScale(OverlayFontScaleStep);
+    }
+
+    private void AdjustOverlayFontScale(double delta)
+    {
+        var nextScale = Math.Clamp(_overlayFontScale + delta, MinOverlayFontScale, MaxOverlayFontScale);
+        nextScale = Math.Round(nextScale, 1, MidpointRounding.AwayFromZero);
+
+        if (Math.Abs(nextScale - _overlayFontScale) < 0.001)
+        {
+            return;
+        }
+
+        _overlayFontScale = nextScale;
+        UpdateFontSizeControls();
+
+        if (_lastOverlayResult is not null)
+        {
+            UpdateOverlay(_lastOverlayResult);
+        }
+    }
+
+    private void UpdateFontSizeControls()
+    {
+        FontSizeScaleText.Text = $"{_overlayFontScale * 100:0}%";
+        DecreaseFontSizeButton.IsEnabled = _overlayFontScale > MinOverlayFontScale + 0.001;
+        IncreaseFontSizeButton.IsEnabled = _overlayFontScale < MaxOverlayFontScale - 0.001;
     }
 
     private async Task RunPipelineLoopAsync(CancellationToken cancellationToken)
@@ -264,6 +314,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        _lastOverlayResult = result;
         _overlayItems.Clear();
         if (!ShouldShowOverlayOnSelectedSource())
         {
@@ -278,6 +329,9 @@ public partial class MainWindow : Window
         }
 
         var showDebugBoxes = DebugOverlayBox.IsChecked == true;
+        var useBlackBlocks = BlackOverlayBlocksBox.IsChecked == true;
+        var blockBackground = useBlackBlocks ? DarkBlockBackground : LightBlockBackground;
+        var blockForeground = useBlackBlocks ? DarkBlockForeground : LightBlockForeground;
 
         foreach (var item in result.OverlayFrame.Items)
         {
@@ -315,9 +369,9 @@ public partial class MainWindow : Window
                 Width = Math.Min(width + (OverlayHorizontalPadding * 2), maxWidth),
                 MinHeight = minHeight + (OverlayVerticalPadding * 2),
                 FontSize = CalculateOverlayFontSize(item, _overlayWindow),
-                Background = "White",
+                Background = blockBackground,
                 BorderBrush = showDebugBoxes ? "#FF0078D4" : "Transparent",
-                Foreground = "Black"
+                Foreground = blockForeground
             });
         }
     }
@@ -353,12 +407,13 @@ public partial class MainWindow : Window
         return foreground == hwnd || GetAncestor(foreground, GA_ROOT) == hwnd;
     }
 
-    private static double CalculateOverlayFontSize(
+    private double CalculateOverlayFontSize(
         LexVerse.Core.Overlay.OverlayTextItem item,
         OverlayWindow overlayWindow)
     {
         var fontRect = overlayWindow.ScreenPhysicalToLocalDip(new(0, 0, 1, Math.Max(1, item.FontSize)));
-        return Math.Clamp(fontRect.Height, 12, 28);
+        var baseFontSize = Math.Clamp(fontRect.Height, MinBaseOverlayFontSize, MaxBaseOverlayFontSize);
+        return Math.Clamp(baseFontSize * _overlayFontScale, MinOverlayFontSize, MaxOverlayFontSize);
     }
 
     private RealtimeTranslationOptions CreateOptions()
@@ -515,6 +570,7 @@ public partial class MainWindow : Window
 
         _overlayWindow?.Close();
         _overlayWindow = null;
+        _lastOverlayResult = null;
         _overlayItems.Clear();
 
         PickButton.IsEnabled = true;

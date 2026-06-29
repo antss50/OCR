@@ -88,14 +88,11 @@ Key files already present:
 
 As of this update:
 
-- Current branch: `feature/pipeline-integration`.
-- Local branch had no upstream in the last check. Remote branch `origin/feature/pipeline-integration` exists. If still true, run:
-
-```powershell
-git branch --set-upstream-to=origin/feature/pipeline-integration
-```
-
-- `pipeline.docx` is currently untracked. Do not delete it. Decide with the user whether it should be committed as documentation or ignored as a local artifact.
+- Current branch: `codex/overlay-ocr-block-contrast`.
+- Branch base: up-to-date `feature/pipeline-integration` at `2d534a3`.
+- `codex/overlay-ocr-block-contrast` has no upstream yet. Push it when the overlay contrast change is ready to share.
+- `feature/pipeline-integration` tracks `origin/feature/pipeline-integration`.
+- `pipeline.docx` was not present in the latest status check.
 - `.gitignore` already ignores common build outputs, Visual Studio state, `.env`, local config, credentials, generated files, and artifacts.
 
 Before changing code in future prompts:
@@ -138,9 +135,21 @@ Use the smallest meaningful verification:
 - Verification caveat: a later sandboxed `dotnet test LexVerse.slnx --no-restore` failed only because the real Google Cloud translation test could not open a socket to `translation.googleapis.com:443`.
 - Caveat: visual verification with a real selected document app and another foreground app is still recommended.
 
+### 2026-06-29 Overlay OCR Block Contrast
+
+- Pulled `feature/pipeline-integration`; remote was already up to date.
+- Created branch `codex/overlay-ocr-block-contrast` from `feature/pipeline-integration`.
+- Added a `Black blocks` option in `samples/LexVerse.Pipeline.Sample`, enabled by default, so translated OCR overlay blocks render with a black background and white text.
+- Kept the old white-background/black-text style available by unchecking `Black blocks`; debug boxes still use their existing diagnostic border.
+- Added overlay font-size controls in `samples/LexVerse.Pipeline.Sample`: `-`, `100%`, and `+` controls adjust translated block text from 60% to 180% in 10% steps and re-render the current overlay frame immediately.
+- Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore` passed with 0 warnings and 0 errors after both overlay contrast and font-size control changes.
+- Caveat: manual visual verification with a selected document app is still recommended before merging back to `feature/pipeline-integration`.
+
 ## Next Recommended Work
 
-1. Decide whether `pipeline.docx` should be tracked or ignored.
-2. Manually run `samples/LexVerse.Pipeline.Sample`, pick a document app, scroll quickly, and confirm translation appears after scroll settles.
-3. While the pipeline is running, open another app over the selected app and confirm the overlay hides; return focus to the selected app and confirm it reappears in the selected app bounds.
-4. For MVP document mode, identify the next concrete slice: region selection UI, OCR grouping accuracy, translation quality/prompting, overlay placement, or pipeline sample polish.
+1. Manually run `samples/LexVerse.Pipeline.Sample`, pick a document app, and confirm translated OCR blocks render as black boxes with white text.
+2. Toggle `Black blocks` off/on while the pipeline is running and confirm both palettes remain readable and aligned.
+3. Use the overlay font `-` and `+` controls while the pipeline is running and confirm the active overlay text resizes without drifting away from OCR boxes.
+4. While the pipeline is running, open another app over the selected app and confirm the overlay hides; return focus to the selected app and confirm it reappears in the selected app bounds.
+5. If the visual result is acceptable, merge `codex/overlay-ocr-block-contrast` back into `feature/pipeline-integration`.
+6. For MVP document mode, identify the next concrete slice: region selection UI, OCR grouping accuracy, translation quality/prompting, overlay placement, or pipeline sample polish.
