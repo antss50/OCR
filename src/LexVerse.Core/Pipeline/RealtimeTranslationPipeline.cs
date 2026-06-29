@@ -13,6 +13,7 @@ public sealed class RealtimeTranslationPipeline
     private readonly ITextTranslator _translator;
     private readonly ITranslationCache _translationCache;
     private readonly RealtimeTranslationOptions _options;
+    private TranslationResultCacheEntry? _lastTranslationCacheEntry;
 
     public RealtimeTranslationPipeline(
         IScreenCaptureSession captureSession,
@@ -35,7 +36,12 @@ public sealed class RealtimeTranslationPipeline
     {
         var totalTimer = Stopwatch.StartNew();
         var ocrResult = await _ocrPipeline.CaptureAndRecognizeAsync(cancellationToken);
-        if (!ocrResult.Changed || ocrResult.OcrResult is null)
+        if (TryCreateCachedTranslationResult(ocrResult, totalTimer, out var cachedResult))
+        {
+            return cachedResult;
+        }
+
+        if (ocrResult.OcrResult is null)
         {
             totalTimer.Stop();
             return new RealtimeTranslationPipelineResult(
@@ -55,6 +61,8 @@ public sealed class RealtimeTranslationPipeline
         translationTimer.Stop();
         totalTimer.Stop();
 
+        StoreTranslationCacheEntry(ocrResult, translatedBlocks.Blocks);
+
         return new RealtimeTranslationPipelineResult(
             ocrResult,
             translatedBlocks.Blocks,
@@ -71,6 +79,64 @@ public sealed class RealtimeTranslationPipeline
                 totalTimer.Elapsed,
                 translatedBlocks.CacheHits,
                 translatedBlocks.CacheMisses));
+    }
+
+    private bool TryCreateCachedTranslationResult(
+        ScreenOcrPipelineResult ocrResult,
+        Stopwatch totalTimer,
+        out RealtimeTranslationPipelineResult result)
+    {
+        result = null!;
+
+        if (!ocrResult.UsedCachedOcrResult || string.IsNullOrWhiteSpace(ocrResult.OcrInputFingerprint))
+        {
+            return false;
+        }
+
+        var cacheEntry = _lastTranslationCacheEntry;
+        if (cacheEntry is null ||
+            !cacheEntry.OcrInputFingerprint.Equals(ocrResult.OcrInputFingerprint, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        totalTimer.Stop();
+        var cacheHits = cacheEntry.Blocks.Count;
+        result = new RealtimeTranslationPipelineResult(
+            ocrResult,
+            cacheEntry.Blocks,
+            CreateTiming(
+                ocrResult.Timing,
+                TimeSpan.Zero,
+                totalTimer.Elapsed,
+                cacheHits,
+                0),
+            CreateOverlayFrame(
+                ocrResult,
+                cacheEntry.Blocks,
+                TimeSpan.Zero,
+                totalTimer.Elapsed,
+                cacheHits,
+                0))
+        {
+            UsedCachedTranslation = true
+        };
+
+        return true;
+    }
+
+    private void StoreTranslationCacheEntry(
+        ScreenOcrPipelineResult ocrResult,
+        IReadOnlyList<TranslatedTextBlock> translatedBlocks)
+    {
+        if (string.IsNullOrWhiteSpace(ocrResult.OcrInputFingerprint))
+        {
+            return;
+        }
+
+        _lastTranslationCacheEntry = new TranslationResultCacheEntry(
+            ocrResult.OcrInputFingerprint,
+            translatedBlocks);
     }
 
     private async Task<TimedTranslationResult> TranslateBlocksAsync(
@@ -395,4 +461,8 @@ public sealed class RealtimeTranslationPipeline
     private sealed record PendingTranslationBlock(
         int Index,
         TranslationTextBlock Block);
+
+    private sealed record TranslationResultCacheEntry(
+        string OcrInputFingerprint,
+        IReadOnlyList<TranslatedTextBlock> Blocks);
 }

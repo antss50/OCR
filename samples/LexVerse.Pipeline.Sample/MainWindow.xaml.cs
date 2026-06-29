@@ -162,6 +162,12 @@ public partial class MainWindow : Window
         {
             UpdateOverlay(result);
 
+            if (result.UsedCachedTranslation)
+            {
+                StatusText.Text = $"Frame unchanged. Cached OCR/translation reused. {FormatTiming(result.Timing)}";
+                return;
+            }
+
             if (!result.Ocr.Changed)
             {
                 StatusText.Text = $"Frame unchanged. OCR skipped. {FormatTiming(result.Timing)}";

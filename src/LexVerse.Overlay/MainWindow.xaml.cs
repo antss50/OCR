@@ -45,6 +45,7 @@ namespace LexVerse.Overlay
             int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
             exStyle |= WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
             SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+            _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
         }
 
         public Rect ScreenPhysicalToLocalDip(ScreenRect physicalRect)
@@ -57,6 +58,7 @@ namespace LexVerse.Overlay
         private const int WS_EX_LAYERED = 0x80000;
         private const int WS_EX_TOOLWINDOW = 0x80;
         private const int WS_EX_NOACTIVATE = 0x08000000;
+        private const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
         private const int SM_XVIRTUALSCREEN = 76;
         private const int SM_YVIRTUALSCREEN = 77;
         private const int SM_CXVIRTUALSCREEN = 78;
@@ -67,6 +69,9 @@ namespace LexVerse.Overlay
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
 
         [DllImport("user32.dll")]
         private static extern int GetSystemMetrics(int nIndex);
