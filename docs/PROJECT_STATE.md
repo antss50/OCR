@@ -88,10 +88,9 @@ Key files already present:
 
 As of this update:
 
-- Current branch: `codex/overlay-ocr-block-contrast`.
-- Branch base: up-to-date `feature/pipeline-integration` at `2d534a3`.
-- `codex/overlay-ocr-block-contrast` has no upstream yet. Push it when the overlay contrast change is ready to share.
-- `feature/pipeline-integration` tracks `origin/feature/pipeline-integration`.
+- Current branch: `feature/pipeline-integration`.
+- `feature/pipeline-integration` tracks `origin/feature/pipeline-integration` and is ahead locally with the merged overlay contrast/font-size work. Push it when ready to share.
+- `codex/overlay-ocr-block-contrast` still exists locally at the merged overlay commit and has no upstream.
 - `pipeline.docx` was not present in the latest status check.
 - `.gitignore` already ignores common build outputs, Visual Studio state, `.env`, local config, credentials, generated files, and artifacts.
 
@@ -145,11 +144,19 @@ Use the smallest meaningful verification:
 - Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore` passed with 0 warnings and 0 errors after both overlay contrast and font-size control changes.
 - Caveat: manual visual verification with a selected document app is still recommended before merging back to `feature/pipeline-integration`.
 
+### 2026-06-29 Overlay Branch Merge
+
+- Committed the overlay contrast/font-size work on `codex/overlay-ocr-block-contrast` as `b076fda`.
+- Merged `codex/overlay-ocr-block-contrast` into `feature/pipeline-integration` with a fast-forward merge.
+- Verification after merge: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore` passed with 0 warnings and 0 errors.
+- Git caveat: `feature/pipeline-integration` is ahead of `origin/feature/pipeline-integration` locally and still needs to be pushed if the merge should be shared.
+
 ## Next Recommended Work
 
 1. Manually run `samples/LexVerse.Pipeline.Sample`, pick a document app, and confirm translated OCR blocks render as black boxes with white text.
 2. Toggle `Black blocks` off/on while the pipeline is running and confirm both palettes remain readable and aligned.
 3. Use the overlay font `-` and `+` controls while the pipeline is running and confirm the active overlay text resizes without drifting away from OCR boxes.
 4. While the pipeline is running, open another app over the selected app and confirm the overlay hides; return focus to the selected app and confirm it reappears in the selected app bounds.
-5. If the visual result is acceptable, merge `codex/overlay-ocr-block-contrast` back into `feature/pipeline-integration`.
-6. For MVP document mode, identify the next concrete slice: region selection UI, OCR grouping accuracy, translation quality/prompting, overlay placement, or pipeline sample polish.
+5. Push `feature/pipeline-integration` to `origin` when the merged overlay changes are ready to share.
+6. Delete `codex/overlay-ocr-block-contrast` locally after the pushed target branch is confirmed, if no further overlay iteration is needed there.
+7. For MVP document mode, identify the next concrete slice: region selection UI, OCR grouping accuracy, translation quality/prompting, overlay placement, or pipeline sample polish.
