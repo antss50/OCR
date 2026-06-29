@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private GraphicsCaptureItem? _captureItem;
     private Func<PixelSize, FrameGeometry>? _captureGeometryProvider;
     private CaptureSourceInfo? _captureSourceInfo;
+    private bool _useMatchedWindowCaptureItem;
     private WindowsGraphicsCaptureSession? _captureSession;
     private OverlayWindow? _overlayWindow;
     private CancellationTokenSource? _pipelineCancellation;
@@ -50,6 +51,7 @@ public partial class MainWindow : Window
             {
                 _captureGeometryProvider = null;
                 _captureSourceInfo = null;
+                _useMatchedWindowCaptureItem = false;
                 StatusText.Text = "Selection canceled.";
                 StartButton.IsEnabled = false;
                 return;
@@ -58,6 +60,7 @@ public partial class MainWindow : Window
             var binding = CreateCaptureBinding(_captureItem);
             _captureGeometryProvider = binding.GeometryProvider;
             _captureSourceInfo = binding.SourceInfo;
+            _useMatchedWindowCaptureItem = binding.UseMatchedWindowCaptureItem;
 
             StatusText.Text = $"Selected: {_captureItem.DisplayName}. {binding.Status}";
             StartButton.IsEnabled = true;
@@ -66,6 +69,7 @@ public partial class MainWindow : Window
         {
             _captureGeometryProvider = null;
             _captureSourceInfo = null;
+            _useMatchedWindowCaptureItem = false;
             StatusText.Text = $"Could not choose source: {ex.Message}";
             StartButton.IsEnabled = false;
         }
@@ -83,8 +87,9 @@ public partial class MainWindow : Window
 
         try
         {
+            var sessionItem = CreateSessionCaptureItem();
             _captureSession = WindowsGraphicsCaptureSession.Create(
-                _captureItem,
+                sessionItem.Item,
                 _captureGeometryProvider,
                 _captureSourceInfo);
             _overlayWindow = new OverlayWindow(_overlayItems);
@@ -94,7 +99,7 @@ public partial class MainWindow : Window
             PickButton.IsEnabled = false;
             StartButton.IsEnabled = false;
             StopButton.IsEnabled = true;
-            StatusText.Text = "Pipeline running.";
+            StatusText.Text = $"Pipeline running. {sessionItem.Status}";
 
             _ = RunPipelineLoopAsync(_pipelineCancellation.Token);
         }
@@ -154,6 +159,31 @@ public partial class MainWindow : Window
         }
 
         await Dispatcher.InvokeAsync(async () => await StopPipelineAsync());
+    }
+
+    private SessionCaptureItem CreateSessionCaptureItem()
+    {
+        if (_useMatchedWindowCaptureItem &&
+            _captureSourceInfo?.Hwnd is { } hwnd &&
+            hwnd != IntPtr.Zero)
+        {
+            try
+            {
+                return new SessionCaptureItem(
+                    GraphicsCaptureItemFactory.CreateForWindow(hwnd),
+                    "Using matched HWND capture item.");
+            }
+            catch (Exception ex)
+            {
+                return new SessionCaptureItem(
+                    _captureItem ?? throw new InvalidOperationException("Pick a source first."),
+                    $"Using picker item; HWND capture unavailable: {ex.Message}");
+            }
+        }
+
+        return new SessionCaptureItem(
+            _captureItem ?? throw new InvalidOperationException("Pick a source first."),
+            "Using picker capture item.");
     }
 
     private void RenderResult(RealtimeTranslationPipelineResult result, bool isPartial)
@@ -289,7 +319,8 @@ public partial class MainWindow : Window
             .Select(candidate => new
             {
                 Candidate = candidate,
-                Score = ScoreWindowCandidate(candidate, item)
+                Score = ScoreWindowCandidate(candidate, item),
+                HasTitleMatch = HasTitleMatch(candidate.Title, item.DisplayName)
             })
             .Where(match => match.Score >= 0)
             .OrderByDescending(match => match.Score)
@@ -300,7 +331,8 @@ public partial class MainWindow : Window
             return new CaptureBinding(
                 null,
                 new CaptureSourceInfo(CaptureSourceKind.Picker, item.DisplayName),
-                "Could not infer screen bounds; overlay may be offset.");
+                "Could not infer screen bounds; overlay may be offset.",
+                false);
         }
 
         var hwnd = best.Candidate.Hwnd;
@@ -321,7 +353,8 @@ public partial class MainWindow : Window
         return new CaptureBinding(
             geometryProvider,
             new CaptureSourceInfo(CaptureSourceKind.Picker, item.DisplayName, hwnd),
-            $"Using window bounds from {best.Candidate.ProcessName ?? "unknown"}.");
+            $"Using window bounds from {best.Candidate.ProcessName ?? "unknown"}.",
+            best.HasTitleMatch);
     }
 
     private static double ScoreWindowCandidate(
@@ -346,6 +379,13 @@ public partial class MainWindow : Window
 
         var score = titleScore - (sizeDelta / 10.0);
         return score > -80 ? score : -1;
+    }
+
+    private static bool HasTitleMatch(string candidateTitle, string displayName)
+    {
+        return candidateTitle.Equals(displayName, StringComparison.OrdinalIgnoreCase)
+            || candidateTitle.Contains(displayName, StringComparison.OrdinalIgnoreCase)
+            || displayName.Contains(candidateTitle, StringComparison.OrdinalIgnoreCase);
     }
 
     private static ScreenRect ChooseSourceRect(
@@ -377,6 +417,11 @@ public partial class MainWindow : Window
     private sealed record CaptureBinding(
         Func<PixelSize, FrameGeometry>? GeometryProvider,
         CaptureSourceInfo SourceInfo,
+        string Status,
+        bool UseMatchedWindowCaptureItem);
+
+    private sealed record SessionCaptureItem(
+        GraphicsCaptureItem Item,
         string Status);
 
     private static IOcrRegionProvider? CreateRegionProvider(RealtimeTranslationOptions options)
