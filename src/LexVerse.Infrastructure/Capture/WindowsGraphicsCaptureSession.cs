@@ -48,7 +48,8 @@ public sealed class WindowsGraphicsCaptureSession : IScreenCaptureSession
     public static WindowsGraphicsCaptureSession Create(
         GraphicsCaptureItem item,
         Func<PixelSize, FrameGeometry>? geometryProvider = null,
-        CaptureSourceInfo? source = null)
+        CaptureSourceInfo? source = null,
+        bool captureCursor = false)
     {
         ArgumentNullException.ThrowIfNull(item);
 
@@ -74,6 +75,7 @@ public sealed class WindowsGraphicsCaptureSession : IScreenCaptureSession
             item.Size);
 
         var session = framePool.CreateCaptureSession(item);
+        session.IsCursorCaptureEnabled = captureCursor;
         session.StartCapture();
 
         return new WindowsGraphicsCaptureSession(
