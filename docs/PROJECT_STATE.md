@@ -88,12 +88,13 @@ Key files already present:
 
 As of this update:
 
-- Current branch: `feature/ui-new-features`.
-- `feature/ui-new-features` was created from `feature/pipeline-integration` at `7a6747f` for UI and new feature development before merging stable work back.
-- `feature/ui-new-features` has no upstream yet.
-- `feature/pipeline-integration` tracks `origin/feature/pipeline-integration` and matched it after `git fetch origin` (`git rev-list --left-right --count feature/pipeline-integration...origin/feature/pipeline-integration` returned `0 0`).
+- Current branch: `feature/pipeline-integration`.
+- `feature/ui-new-features` was created from `feature/pipeline-integration` at `7a6747f`, then committed UI/new feature work as `dc02f3b`.
+- `feature/pipeline-integration` was fast-forward merged to `dc02f3b` with the UI/new feature work, excluding the experimental source/translation alignment feature.
+- `feature/pipeline-integration` tracks `origin/feature/pipeline-integration` and is ahead locally until the merge/docs updates are pushed.
+- `feature/ui-new-features` still exists locally at `dc02f3b` and has no upstream.
 - `codex/overlay-ocr-block-contrast` still exists locally at the merged overlay commit and has no upstream.
-- Latest working tree changes are the Base44-inspired pipeline sample UI and feature wiring pass plus this project state update.
+- Latest working tree changes are this post-merge project state update.
 - `.gitignore` already ignores common build outputs, Visual Studio state, `.env`, local config, credentials, generated files, and artifacts.
 
 Before changing code in future prompts:
@@ -298,6 +299,14 @@ Use the smallest meaningful verification:
 - Deleted the alignment-only helper files for selected-text geometry reading, word alignment building, and source highlight overlays.
 - Restored the F6 popup result to plain translated text plus clickable `Important terms`; it no longer creates hoverable translated runs or draws highlights over the source app.
 - Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-...` passed with 0 warnings and 0 errors.
+
+### 2026-07-04 UI/New Features Merge To Pipeline Integration
+
+- Committed the Base44-inspired command center UI, Popup/F6 flow, clickable important-term lookup, Region realtime flow, Full screen realtime flow, monitor capture factory support, themed controls, popup border/drag fixes, and project state updates on `feature/ui-new-features` as `dc02f3b`.
+- Confirmed the experimental source/translation alignment files were not staged or committed.
+- Fast-forward merged `feature/ui-new-features` into `feature/pipeline-integration`.
+- Verification after merge: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-...` passed with 0 warnings and 0 errors.
+- Git caveat: `feature/pipeline-integration` is ahead of `origin/feature/pipeline-integration` locally and needs to be pushed when ready to share.
 
 ## Next Recommended Work
 
