@@ -28,6 +28,26 @@ public static class GraphicsCaptureItemFactory
         }
     }
 
+    public static GraphicsCaptureItem CreateForMonitor(IntPtr monitor)
+    {
+        if (monitor == IntPtr.Zero)
+        {
+            throw new ArgumentException("Monitor handle must not be zero.", nameof(monitor));
+        }
+
+        var interop = GraphicsCaptureItem.As<IGraphicsCaptureItemInterop>();
+        interop.CreateForMonitor(monitor, GraphicsCaptureItemGuid, out var itemPointer).ThrowOnFailure();
+
+        try
+        {
+            return MarshalInterface<GraphicsCaptureItem>.FromAbi(itemPointer);
+        }
+        finally
+        {
+            Marshal.Release(itemPointer);
+        }
+    }
+
     [ComImport]
     [Guid("3628E81B-3CAC-4C60-B7F4-23CE0E0C3356")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
