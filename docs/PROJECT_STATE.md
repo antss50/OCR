@@ -91,10 +91,10 @@ As of this update:
 - Current branch: `feature/pipeline-integration`.
 - `feature/ui-new-features` was created from `feature/pipeline-integration` at `7a6747f`, then committed UI/new feature work as `dc02f3b`.
 - `feature/pipeline-integration` was fast-forward merged to `dc02f3b` with the UI/new feature work, excluding the experimental source/translation alignment feature.
-- `feature/pipeline-integration` tracks `origin/feature/pipeline-integration` and is ahead locally until the merge/docs updates are pushed.
+- `feature/pipeline-integration` tracks `origin/feature/pipeline-integration` and was pushed to GitHub after the UI/new feature merge.
 - `feature/ui-new-features` still exists locally at `dc02f3b` and has no upstream.
 - `codex/overlay-ocr-block-contrast` still exists locally at the merged overlay commit and has no upstream.
-- Latest working tree changes are this post-merge project state update.
+- Latest working tree changes are this post-push project state update.
 - `.gitignore` already ignores common build outputs, Visual Studio state, `.env`, local config, credentials, generated files, and artifacts.
 
 Before changing code in future prompts:
@@ -306,7 +306,7 @@ Use the smallest meaningful verification:
 - Confirmed the experimental source/translation alignment files were not staged or committed.
 - Fast-forward merged `feature/ui-new-features` into `feature/pipeline-integration`.
 - Verification after merge: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-...` passed with 0 warnings and 0 errors.
-- Git caveat: `feature/pipeline-integration` is ahead of `origin/feature/pipeline-integration` locally and needs to be pushed when ready to share.
+- Git status: `feature/pipeline-integration` was pushed to `origin/feature/pipeline-integration` after the merge.
 
 ## Next Recommended Work
 
@@ -320,4 +320,4 @@ Use the smallest meaningful verification:
 8. Test Full screen on the primary/nearest monitor and confirm overlays still align to source coordinates.
 9. Confirm the F6 popup no longer renders source/translation comparison highlights; it should show only the translation and clickable `Important terms`.
 10. Replace the Wikipedia-first keyword explainer with a provider-backed AI annotation service if Bedrock/OpenAI-style popup understanding is added later; keep the current lookup path as a low-cost fallback.
-11. Push `feature/pipeline-integration` after the UI/new features merge is reviewed locally.
+11. Review the pushed `feature/pipeline-integration` branch on GitHub before opening or updating a PR.
