@@ -94,7 +94,7 @@ As of this update:
 - `feature/pipeline-integration` tracks `origin/feature/pipeline-integration` and was pushed to GitHub after the UI/new feature merge.
 - `feature/ui-new-features` still exists locally at `dc02f3b` and has no upstream.
 - `codex/overlay-ocr-block-contrast` still exists locally at the merged overlay commit and has no upstream.
-- Latest working tree changes are this post-push project state update.
+- Latest working tree changes are a pipeline sample memory optimization: the UI keeps only the last lightweight overlay frame for font re-rendering instead of the full realtime result with captured pixels.
 - `.gitignore` already ignores common build outputs, Visual Studio state, `.env`, local config, credentials, generated files, and artifacts.
 
 Before changing code in future prompts:
@@ -307,6 +307,13 @@ Use the smallest meaningful verification:
 - Fast-forward merged `feature/ui-new-features` into `feature/pipeline-integration`.
 - Verification after merge: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-...` passed with 0 warnings and 0 errors.
 - Git status: `feature/pipeline-integration` was pushed to `origin/feature/pipeline-integration` after the merge.
+
+### 2026-07-05 Pipeline Sample Memory Optimization
+
+- Confirmed the experimental popup source/translation comparison runtime code is absent from `samples/` and `src/`; only historical notes remain in `docs/PROJECT_STATE.md`.
+- Changed `samples/LexVerse.Pipeline.Sample/MainWindow.xaml.cs` so overlay font-size re-rendering stores the last `OverlayRenderFrame` only, rather than the full `RealtimeTranslationPipelineResult`.
+- This avoids the UI holding onto `ScreenOcrPipelineResult.Frame.Pixels` after rendering, reducing retained memory while realtime capture is running.
+- Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-...` passed with 0 warnings and 0 errors.
 
 ## Next Recommended Work
 

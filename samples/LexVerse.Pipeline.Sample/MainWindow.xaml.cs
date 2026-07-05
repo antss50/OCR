@@ -9,6 +9,7 @@ using System.Windows.Interop;
 using LexVerse.Core.Capture;
 using LexVerse.Core.Geometry;
 using LexVerse.Core.Imaging;
+using LexVerse.Core.Overlay;
 using LexVerse.Core.Pipeline;
 using LexVerse.Core.ScreenCapture;
 using LexVerse.Core.Translation;
@@ -65,7 +66,7 @@ public partial class MainWindow : Window
     private HwndSource? _hwndSource;
     private bool _isSelectingRegion;
     private bool _isHotkeyRegistered;
-    private RealtimeTranslationPipelineResult? _lastOverlayResult;
+    private OverlayRenderFrame? _lastOverlayFrame;
     private double _overlayFontScale = 1;
 
     public MainWindow()
@@ -571,9 +572,9 @@ public partial class MainWindow : Window
         _overlayFontScale = nextScale;
         UpdateFontSizeControls();
 
-        if (_lastOverlayResult is not null)
+        if (_lastOverlayFrame is not null)
         {
-            UpdateOverlay(_lastOverlayResult);
+            UpdateOverlay(_lastOverlayFrame);
         }
     }
 
@@ -725,12 +726,17 @@ public partial class MainWindow : Window
 
     private void UpdateOverlay(RealtimeTranslationPipelineResult result)
     {
+        UpdateOverlay(result.OverlayFrame);
+    }
+
+    private void UpdateOverlay(OverlayRenderFrame frame)
+    {
         if (_overlayWindow is null)
         {
             return;
         }
 
-        _lastOverlayResult = result;
+        _lastOverlayFrame = frame;
         _overlayItems.Clear();
         if (!ShouldShowOverlayOnSelectedSource())
         {
@@ -738,7 +744,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        _overlayWindow.SetPhysicalBounds(result.Ocr.Frame.Geometry.SourceScreenRect);
+        if (frame.Trace is null)
+        {
+            _overlayWindow.Hide();
+            return;
+        }
+
+        _overlayWindow.SetPhysicalBounds(frame.Trace.Geometry.SourceScreenRect);
         if (!_overlayWindow.IsVisible)
         {
             _overlayWindow.Show();
@@ -749,7 +761,7 @@ public partial class MainWindow : Window
         var blockBackground = useBlackBlocks ? DarkBlockBackground : LightBlockBackground;
         var blockForeground = useBlackBlocks ? DarkBlockForeground : LightBlockForeground;
 
-        foreach (var item in result.OverlayFrame.Items)
+        foreach (var item in frame.Items)
         {
             var targetRect = _overlayWindow.ScreenPhysicalToLocalDip(item.TargetRect);
             var x = targetRect.X;
@@ -824,7 +836,7 @@ public partial class MainWindow : Window
     }
 
     private double CalculateOverlayFontSize(
-        LexVerse.Core.Overlay.OverlayTextItem item,
+        OverlayTextItem item,
         OverlayWindow overlayWindow)
     {
         var fontRect = overlayWindow.ScreenPhysicalToLocalDip(new(0, 0, 1, Math.Max(1, item.FontSize)));
@@ -951,7 +963,7 @@ public partial class MainWindow : Window
 
         _overlayWindow?.Close();
         _overlayWindow = null;
-        _lastOverlayResult = null;
+        _lastOverlayFrame = null;
         _overlayItems.Clear();
 
         SetRealtimeSourceButtonsEnabled(true);
