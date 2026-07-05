@@ -292,6 +292,7 @@ public partial class MainWindow : Window
             sourceText,
             GetSelectedTargetLanguageCode(),
             GetSelectedSourceLanguageForTranslation(),
+            CreateTranslationPromptOptions(),
             cancellationToken);
         var loadingDelay = ShowPopupBeforeTranslationFinishesBox.IsChecked == true
             ? TimeSpan.Zero
@@ -350,7 +351,7 @@ public partial class MainWindow : Window
         string targetLanguageCode,
         CancellationToken cancellationToken)
     {
-        _popupKeywordExplainer ??= new PopupKeywordExplainer(_popupTranslator.Value);
+        _popupKeywordExplainer ??= new PopupKeywordExplainer(_popupTranslator.Value, CreateTranslationPromptOptions);
         return _popupKeywordExplainer.ExplainAsync(
             term,
             context,
@@ -607,6 +608,7 @@ public partial class MainWindow : Window
             try
             {
                 var iterationTimer = Stopwatch.StartNew();
+                pipeline.UpdateTranslationPrompt(CreateTranslationPromptOptions());
                 var result = await pipeline.CaptureRecognizeAndTranslateAsync(
                     cancellationToken,
                     (partialResult, _) =>
@@ -855,7 +857,36 @@ public partial class MainWindow : Window
             _ => RealtimeTranslationOptions.FullScreen
         };
 
-        return baseOptions with { TargetLanguage = GetComboBoxTagOrText(TargetLanguageBox) };
+        return baseOptions with
+        {
+            TargetLanguage = GetComboBoxTagOrText(TargetLanguageBox),
+            TranslationPrompt = CreateTranslationPromptOptions()
+        };
+    }
+
+    private TranslationPromptOptions CreateTranslationPromptOptions()
+    {
+        return new TranslationPromptOptions(TranslationPromptBox.Text);
+    }
+
+    private void TranslationPromptBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (TranslationPromptRuntimeText is null)
+        {
+            return;
+        }
+
+        var promptOptions = new TranslationPromptOptions((sender as TextBox)?.Text);
+        TranslationPromptRuntimeText.Text = promptOptions.HasInstruction
+            ? "Custom prompt"
+            : "Default";
+
+        if (IsLoaded)
+        {
+            StatusText.Text = promptOptions.HasInstruction
+                ? "Status: Translation style prompt updated."
+                : "Status: Translation style prompt cleared.";
+        }
     }
 
     private static string GetComboBoxTagOrText(ComboBox comboBox)

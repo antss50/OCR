@@ -52,6 +52,16 @@ public sealed class GoogleCloudTextTranslator : ITextTranslator
             response.DetectedSourceLanguage ?? sourceLanguage);
     }
 
+    public Task<TextTranslationResult> TranslateAsync(
+        string text,
+        string targetLanguage,
+        string? sourceLanguage,
+        TranslationPromptOptions? promptOptions,
+        CancellationToken cancellationToken = default)
+    {
+        return TranslateAsync(text, targetLanguage, sourceLanguage, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<TextTranslationResult>> TranslateBatchAsync(
         IReadOnlyList<string> texts,
         string targetLanguage,
@@ -113,5 +123,15 @@ public sealed class GoogleCloudTextTranslator : ITextTranslator
         }
 
         return results;
+    }
+
+    public Task<IReadOnlyList<TextTranslationResult>> TranslateBatchAsync(
+        IReadOnlyList<string> texts,
+        string targetLanguage,
+        string? sourceLanguage,
+        TranslationPromptOptions? promptOptions,
+        CancellationToken cancellationToken = default)
+    {
+        return TranslateBatchAsync(texts, targetLanguage, sourceLanguage, cancellationToken);
     }
 }

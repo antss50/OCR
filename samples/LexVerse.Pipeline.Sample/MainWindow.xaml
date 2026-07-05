@@ -1028,9 +1028,29 @@
                                                    Foreground="{StaticResource WarningBrush}"/>
                                     </Grid>
 
-                                    <ListBox x:Name="BlocksListBox"
-                                             Grid.Row="2"
-                                             Visibility="Collapsed"/>
+                                    <StackPanel Grid.Row="2"
+                                                Margin="0,8,0,0">
+                                        <TextBlock Style="{StaticResource SectionLabelText}"
+                                                   Text="TRANSLATION STYLE"/>
+                                        <TextBox x:Name="TranslationPromptBox"
+                                                 Style="{StaticResource LightTextBox}"
+                                                 Margin="0,12,0,0"
+                                                 MinHeight="92"
+                                                 MaxHeight="132"
+                                                 MaxLength="1200"
+                                                 AcceptsReturn="True"
+                                                 TextWrapping="Wrap"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 VerticalContentAlignment="Top"
+                                                 TextChanged="TranslationPromptBox_TextChanged"
+                                                 Text="Translate naturally and clearly. Keep proper names, technical terms, HP/MP/EXP unchanged. Do not add explanations."/>
+                                        <TextBlock x:Name="TranslationPromptRuntimeText"
+                                                   Style="{StaticResource MutedText}"
+                                                   Margin="0,8,0,0"
+                                                   Text="Custom prompt"/>
+                                        <ListBox x:Name="BlocksListBox"
+                                                 Visibility="Collapsed"/>
+                                    </StackPanel>
                                 </Grid>
                             </Border>
                         </Grid>

@@ -12,7 +12,7 @@ public sealed class RealtimeTranslationPipeline
     private readonly ScreenOcrPipeline _ocrPipeline;
     private readonly ITextTranslator _translator;
     private readonly ITranslationCache _translationCache;
-    private readonly RealtimeTranslationOptions _options;
+    private RealtimeTranslationOptions _options;
     private TranslationResultCacheEntry? _lastTranslationCacheEntry;
 
     public RealtimeTranslationPipeline(
@@ -28,6 +28,14 @@ public sealed class RealtimeTranslationPipeline
         _translator = translator;
         _translationCache = translationCache;
         _options = options;
+    }
+
+    public void UpdateTranslationPrompt(TranslationPromptOptions? translationPrompt)
+    {
+        _options = _options with
+        {
+            TranslationPrompt = translationPrompt ?? TranslationPromptOptions.Empty
+        };
     }
 
     public async Task<RealtimeTranslationPipelineResult> CaptureRecognizeAndTranslateAsync(
@@ -88,14 +96,18 @@ public sealed class RealtimeTranslationPipeline
     {
         result = null!;
 
-        if (!ocrResult.UsedCachedOcrResult || string.IsNullOrWhiteSpace(ocrResult.OcrInputFingerprint))
+        if (!ocrResult.UsedCachedOcrResult ||
+            string.IsNullOrWhiteSpace(ocrResult.OcrInputFingerprint) ||
+            ocrResult.OcrResult is null)
         {
             return false;
         }
 
+        var contextKey = CreateTranslationContextKey(ocrResult.OcrResult);
         var cacheEntry = _lastTranslationCacheEntry;
         if (cacheEntry is null ||
-            !cacheEntry.OcrInputFingerprint.Equals(ocrResult.OcrInputFingerprint, StringComparison.Ordinal))
+            !cacheEntry.OcrInputFingerprint.Equals(ocrResult.OcrInputFingerprint, StringComparison.Ordinal) ||
+            cacheEntry.ContextKey != contextKey)
         {
             return false;
         }
@@ -129,13 +141,15 @@ public sealed class RealtimeTranslationPipeline
         ScreenOcrPipelineResult ocrResult,
         IReadOnlyList<TranslatedTextBlock> translatedBlocks)
     {
-        if (string.IsNullOrWhiteSpace(ocrResult.OcrInputFingerprint))
+        if (string.IsNullOrWhiteSpace(ocrResult.OcrInputFingerprint) ||
+            ocrResult.OcrResult is null)
         {
             return;
         }
 
         _lastTranslationCacheEntry = new TranslationResultCacheEntry(
             ocrResult.OcrInputFingerprint,
+            CreateTranslationContextKey(ocrResult.OcrResult),
             translatedBlocks);
     }
 
@@ -164,7 +178,8 @@ public sealed class RealtimeTranslationPipeline
                 normalizedText,
                 sourceLanguage ?? "auto",
                 batch.TargetLanguage,
-                _options.Mode);
+                _options.Mode,
+                _options.TranslationPrompt.CacheKey);
 
             if (ShouldUseSourceText(normalizedText, sourceLanguage, batch.TargetLanguage))
             {
@@ -212,6 +227,7 @@ public sealed class RealtimeTranslationPipeline
                             chunk.Select(item => item.NormalizedText).ToArray(),
                             batch.TargetLanguage,
                             sourceLanguage,
+                            _options.TranslationPrompt,
                             cancellationToken);
 
                         lock (gate)
@@ -448,6 +464,15 @@ public sealed class RealtimeTranslationPipeline
             : sourceLanguage;
     }
 
+    private TranslationContextKey CreateTranslationContextKey(OcrResult ocrResult)
+    {
+        return new TranslationContextKey(
+            NormalizeSourceLanguage(ocrResult.Language, _options.SourceLanguage) ?? "auto",
+            _options.TargetLanguage,
+            _options.Mode,
+            _options.TranslationPrompt.CacheKey);
+    }
+
     private sealed record TimedTranslationResult(
         IReadOnlyList<TranslatedTextBlock> Blocks,
         int CacheHits,
@@ -462,7 +487,14 @@ public sealed class RealtimeTranslationPipeline
         int Index,
         TranslationTextBlock Block);
 
+    private sealed record TranslationContextKey(
+        string SourceLanguage,
+        string TargetLanguage,
+        OcrProcessingMode Mode,
+        string TranslationPromptKey);
+
     private sealed record TranslationResultCacheEntry(
         string OcrInputFingerprint,
+        TranslationContextKey ContextKey,
         IReadOnlyList<TranslatedTextBlock> Blocks);
 }

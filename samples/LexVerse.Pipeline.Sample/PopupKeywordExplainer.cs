@@ -27,12 +27,17 @@ public sealed class PopupKeywordExplainer
         };
 
     private readonly ITextTranslator _translator;
+    private readonly Func<TranslationPromptOptions>? _promptOptionsProvider;
     private readonly HttpClient _httpClient;
     private readonly Dictionary<string, string> _cache = new(StringComparer.OrdinalIgnoreCase);
 
-    public PopupKeywordExplainer(ITextTranslator translator, HttpClient? httpClient = null)
+    public PopupKeywordExplainer(
+        ITextTranslator translator,
+        Func<TranslationPromptOptions>? promptOptionsProvider = null,
+        HttpClient? httpClient = null)
     {
         _translator = translator;
+        _promptOptionsProvider = promptOptionsProvider;
         _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
 
         if (!_httpClient.DefaultRequestHeaders.UserAgent.Any())
@@ -50,7 +55,8 @@ public sealed class PopupKeywordExplainer
     {
         term = term.Trim();
         targetLanguage = NormalizeTargetLanguage(targetLanguage);
-        var cacheKey = $"{targetLanguage}|{term}|{BuildContextHint(term, context)}";
+        var promptOptions = _promptOptionsProvider?.Invoke() ?? TranslationPromptOptions.Empty;
+        var cacheKey = $"{targetLanguage}|{promptOptions.CacheKey}|{term}|{BuildContextHint(term, context)}";
 
         if (_cache.TryGetValue(cacheKey, out var cached))
         {
@@ -75,6 +81,7 @@ public sealed class PopupKeywordExplainer
             var localizedSummary = await LocalizeSummaryAsync(
                 shortSummary,
                 targetLanguage,
+                promptOptions,
                 cancellationToken);
 
             return Cache(cacheKey, localizedSummary);
@@ -148,6 +155,7 @@ public sealed class PopupKeywordExplainer
     private async Task<string> LocalizeSummaryAsync(
         string summary,
         string targetLanguage,
+        TranslationPromptOptions promptOptions,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(targetLanguage) ||
@@ -162,6 +170,7 @@ public sealed class PopupKeywordExplainer
                 summary,
                 targetLanguage,
                 "en",
+                promptOptions,
                 cancellationToken);
 
             return WebUtility.HtmlDecode(result.TranslatedText).Trim();

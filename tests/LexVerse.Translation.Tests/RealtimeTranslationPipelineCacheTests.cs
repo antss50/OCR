@@ -40,6 +40,37 @@ public sealed class RealtimeTranslationPipelineCacheTests
         Assert.Equal("xin chao", secondResult.OverlayFrame.Items[0].TranslatedText);
     }
 
+    [Fact]
+    public async Task CaptureRecognizeAndTranslateAsync_WhenPromptChanges_RetranslatesCachedOcr()
+    {
+        var firstFrame = CreateFrame();
+        var repeatedFrame = CreateFrame();
+        var captureSession = new FakeCaptureSession(firstFrame, repeatedFrame);
+        var ocrService = new FakeOcrService();
+        var translator = new FakeTextTranslator();
+        var pipeline = new RealtimeTranslationPipeline(
+            captureSession,
+            new ExactFrameChangeDetector(),
+            ocrService,
+            translator,
+            new InMemoryTranslationCache(),
+            RealtimeTranslationOptions.Document with
+            {
+                TranslationPrompt = new TranslationPromptOptions("natural style")
+            });
+
+        _ = await pipeline.CaptureRecognizeAndTranslateAsync(TestContext.Current.CancellationToken);
+        pipeline.UpdateTranslationPrompt(new TranslationPromptOptions("literal style"));
+        var secondResult = await pipeline.CaptureRecognizeAndTranslateAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, ocrService.CallCount);
+        Assert.Equal(2, translator.CallCount);
+        Assert.True(secondResult.Ocr.UsedCachedOcrResult);
+        Assert.False(secondResult.UsedCachedTranslation);
+        Assert.Equal("xin chao:literal style", secondResult.OverlayFrame.Items[0].TranslatedText);
+        Assert.NotEqual(translator.PromptKeys[0], translator.PromptKeys[1]);
+    }
+
     private static CapturedFrame CreateFrame()
     {
         var width = 16;
@@ -109,6 +140,7 @@ public sealed class RealtimeTranslationPipelineCacheTests
     private sealed class FakeTextTranslator : ITextTranslator
     {
         public int CallCount { get; private set; }
+        public List<string> PromptKeys { get; } = [];
 
         public Task<TextTranslationResult> TranslateAsync(
             string text,
@@ -116,8 +148,30 @@ public sealed class RealtimeTranslationPipelineCacheTests
             string? sourceLanguage = null,
             CancellationToken cancellationToken = default)
         {
+            return TranslateAsync(
+                text,
+                targetLanguage,
+                sourceLanguage,
+                TranslationPromptOptions.Empty,
+                cancellationToken);
+        }
+
+        public Task<TextTranslationResult> TranslateAsync(
+            string text,
+            string targetLanguage,
+            string? sourceLanguage,
+            TranslationPromptOptions? promptOptions,
+            CancellationToken cancellationToken = default)
+        {
             CallCount++;
-            return Task.FromResult(new TextTranslationResult(text, "xin chao", targetLanguage, sourceLanguage));
+            promptOptions ??= TranslationPromptOptions.Empty;
+            PromptKeys.Add(promptOptions.CacheKey);
+
+            var translatedText = promptOptions.HasInstruction
+                ? $"xin chao:{promptOptions.Instruction}"
+                : "xin chao";
+
+            return Task.FromResult(new TextTranslationResult(text, translatedText, targetLanguage, sourceLanguage));
         }
     }
 }

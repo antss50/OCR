@@ -6,4 +6,5 @@ public sealed record TranslationCacheKey(
     string NormalizedSourceText,
     string SourceLanguage,
     string TargetLanguage,
-    OcrProcessingMode Mode);
+    OcrProcessingMode Mode,
+    string TranslationPromptKey = "");

@@ -94,7 +94,8 @@ As of this update:
 - `feature/pipeline-integration` tracks `origin/feature/pipeline-integration` and was pushed to GitHub after the UI/new feature merge.
 - `feature/ui-new-features` still exists locally at `dc02f3b` and has no upstream.
 - `codex/overlay-ocr-block-contrast` still exists locally at the merged overlay commit and has no upstream.
-- Latest working tree changes are a pipeline sample memory optimization: the UI keeps only the last lightweight overlay frame for font re-rendering instead of the full realtime result with captured pixels.
+- Latest local committed change is a pipeline sample memory optimization: the UI keeps only the last lightweight overlay frame for font re-rendering instead of the full realtime result with captured pixels.
+- Latest working tree changes add runtime translation style prompt plumbing/UI; these are not committed yet as of this note.
 - `.gitignore` already ignores common build outputs, Visual Studio state, `.env`, local config, credentials, generated files, and artifacts.
 
 Before changing code in future prompts:
@@ -315,6 +316,18 @@ Use the smallest meaningful verification:
 - This avoids the UI holding onto `ScreenOcrPipelineResult.Frame.Pixels` after rendering, reducing retained memory while realtime capture is running.
 - Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-...` passed with 0 warnings and 0 errors.
 
+### 2026-07-05 Runtime Translation Style Prompt
+
+- Added `TranslationPromptOptions` in `src/LexVerse.Core/Translation` so a user-written translation instruction can flow through translator calls without changing older implementations.
+- Extended `ITextTranslator` with prompt-aware overloads; `GoogleCloudTextTranslator` accepts the overloads but still ignores prompt instructions because the current Google Cloud Translation V2 API path is not prompt-driven.
+- Added `TranslationPrompt` to `RealtimeTranslationOptions` and included its cache key in `TranslationCacheKey`, preventing prompt/style changes from reusing old translation cache entries.
+- Updated `RealtimeTranslationPipeline` so the last cached translation result is also keyed by source language, target language, mode, and prompt cache key. The sample updates the prompt before each realtime loop iteration, so changing the Runtime prompt can apply on the next pass without restarting realtime.
+- Added a `TRANSLATION STYLE` text area in the Control Center Runtime card. Popup/F6 translation, popup keyword summary localization, and realtime translation now all pass the same runtime prompt options.
+- Added a pipeline cache test proving that changing the prompt reuses cached OCR but retranslates instead of returning the previous translation.
+- Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-prompt` passed with 0 warnings and 0 errors.
+- Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore` passed: 15 passed, 0 failed, 0 skipped.
+- Caveat: a real AI/Bedrock/OpenAI-style translator still needs to consume `TranslationPromptOptions.Instruction` for visible style changes. The current Google translator keeps behavior unchanged while preserving the plumbing.
+
 ## Next Recommended Work
 
 1. Manually run `samples/LexVerse.Pipeline.Sample`, pick a document app, and confirm translated OCR blocks render as black boxes with white text.
@@ -327,4 +340,5 @@ Use the smallest meaningful verification:
 8. Test Full screen on the primary/nearest monitor and confirm overlays still align to source coordinates.
 9. Confirm the F6 popup no longer renders source/translation comparison highlights; it should show only the translation and clickable `Important terms`.
 10. Replace the Wikipedia-first keyword explainer with a provider-backed AI annotation service if Bedrock/OpenAI-style popup understanding is added later; keep the current lookup path as a low-cost fallback.
-11. Review the pushed `feature/pipeline-integration` branch on GitHub before opening or updating a PR.
+11. Add a prompt-aware AI translator provider that consumes `TranslationPromptOptions.Instruction`; Google Cloud Translation V2 currently ignores the runtime prompt text.
+12. Review the pushed `feature/pipeline-integration` branch on GitHub before opening or updating a PR.

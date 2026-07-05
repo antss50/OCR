@@ -1,3 +1,5 @@
+using LexVerse.Core.Translation;
+
 namespace LexVerse.Core.Pipeline;
 
 public sealed record RealtimeTranslationOptions(
@@ -9,6 +11,8 @@ public sealed record RealtimeTranslationOptions(
     public int MaxParallelTranslationRequests { get; init; } = 2;
 
     public int MaxTranslationBatchSize { get; init; } = 12;
+
+    public TranslationPromptOptions TranslationPrompt { get; init; } = TranslationPromptOptions.Empty;
 
     public static RealtimeTranslationOptions Subtitle { get; } = new(
         OcrProcessingMode.Subtitle,
