@@ -96,8 +96,8 @@ As of this update:
 - `feature/pipeline-integration` tracks `origin/feature/pipeline-integration` and was pushed to GitHub after the UI/new feature merge.
 - `feature/ui-new-features` still exists locally at `dc02f3b` and has no upstream.
 - `codex/overlay-ocr-block-contrast` still exists locally at the merged overlay commit and has no upstream.
-- Latest local committed change is `27d021c feat: thêm tùy chỉnh văn phong dịch trong runtime`; it sits on top of the earlier RAM optimization commit.
-- Latest working tree changes fix the Control Center `Ignored terms` behavior by suppressing ignored-only OCR blocks from realtime overlays and preserving configured terms/acronyms inside normal sentences; these are not committed yet as of this note.
+- Latest local committed change is `4e0283e fix: bỏ qua ignored terms trong overlay realtime`; the branch is currently ahead of `origin/feature/pipeline-integration` by 3 commits.
+- Latest working tree changes add the Control Center settings panel with only app language and shortcut configuration; these are not committed yet as of this note.
 - `.gitignore` already ignores common build outputs, Visual Studio state, `.env`, local config, credentials, generated files, and artifacts.
 
 Before changing code in future prompts:
@@ -343,6 +343,19 @@ Use the smallest meaningful verification:
 - Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore` passed: 24 passed, 0 failed, 0 skipped.
 - Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-ignored-terms` passed with 0 warnings and 0 errors.
 
+### 2026-07-05 Control Center Settings Panel
+
+- Added `samples/LexVerse.Pipeline.Sample/AppUserSettings.cs` to persist local app settings under `%APPDATA%\LexVerse\pipeline-sample-settings.ini`.
+- Added a gear settings panel in the Control Center with only the two requested groups: `Language` and `Shortcuts`.
+- `Language` currently switches the app UI between English and Vietnamese labels. This is separate from `FROM`/`TO`, which still control translation source and target languages.
+- `Shortcuts` lets the user rebind Popup translate, Region translate, Full screen realtime, Stop realtime, and Reset/clear overlay. Defaults are F6, Ctrl+Shift+R, Ctrl+Shift+F, Esc, and Ctrl+Shift+Backspace.
+- Shortcut changes check for duplicates before saving. The Popup shortcut also re-registers the global hotkey and rejects combinations already taken by another app.
+- The header Popup hotkey badge, Runtime hotkey row, tooltip text, and status text now reflect the configured Popup shortcut instead of hard-coded F6.
+- Optimized the settings storage path to use a small key/value file instead of loading `System.Text.Json` at app startup.
+- Memory diagnostic on this machine: a hidden idle launch of `HEAD` before the Settings panel measured about 188 MB Working Set / 145 MB Private Memory; the Settings build measured about 206 MB / 160 MB. The Settings feature appears to add roughly 15-18 MB in this measurement, while most idle memory is still the WPF/.NET/OCR/capture baseline.
+- Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-settings` passed with 0 warnings and 0 errors.
+- Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore` passed: 24 passed, 0 failed, 0 skipped.
+
 ## Next Recommended Work
 
 1. Manually run `samples/LexVerse.Pipeline.Sample`, pick a document app, and confirm translated OCR blocks render as black boxes with white text.
@@ -355,6 +368,7 @@ Use the smallest meaningful verification:
 8. Test Full screen on the primary/nearest monitor and confirm overlays still align to source coordinates.
 9. Confirm the F6 popup no longer renders source/translation comparison highlights; it should show only the translation and clickable `Important terms`.
 10. Test ignored terms live with Popup/F6 and Region realtime, especially multi-word terms and game stats such as HP, MP, and EXP.
-11. Replace the Wikipedia-first keyword explainer with a provider-backed AI annotation service if Bedrock/OpenAI-style popup understanding is added later; keep the current lookup path as a low-cost fallback.
-12. Add a prompt-aware AI translator provider that consumes `TranslationPromptOptions.Instruction`; Google Cloud Translation V2 currently ignores the runtime prompt text.
-13. Review the pushed `feature/pipeline-integration` branch on GitHub before opening or updating a PR.
+11. Open the new Settings gear panel and verify that English/Tiếng Việt app language switching, duplicate shortcut warnings, and Popup global hotkey re-registration behave correctly.
+12. Replace the Wikipedia-first keyword explainer with a provider-backed AI annotation service if Bedrock/OpenAI-style popup understanding is added later; keep the current lookup path as a low-cost fallback.
+13. Add a prompt-aware AI translator provider that consumes `TranslationPromptOptions.Instruction`; Google Cloud Translation V2 currently ignores the runtime prompt text.
+14. Review the pushed `feature/pipeline-integration` branch on GitHub before opening or updating a PR.

@@ -40,8 +40,10 @@ public partial class MainWindow : Window
     private const double OverlayFontScaleStep = 0.1;
     private const int HotkeyId = 0x4C56;
     private const int WmHotkey = 0x0312;
-    private const uint VkF6 = 0x75;
     private const uint ModNoRepeat = 0x4000;
+    private const uint ModAlt = 0x0001;
+    private const uint ModControl = 0x0002;
+    private const uint ModShift = 0x0004;
     private const byte VkControl = 0x11;
     private const byte VkC = 0x43;
     private const uint KeyEventKeyUp = 0x0002;
@@ -49,8 +51,129 @@ public partial class MainWindow : Window
     private const double WindowEdgeDragThickness = 18;
     private const int WmNcLeftButtonDown = 0x00A1;
     private static readonly IntPtr HtCaption = new(0x0002);
+    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> LocalizedText =
+        new Dictionary<string, IReadOnlyDictionary<string, string>>
+        {
+            ["en"] = new Dictionary<string, string>
+            {
+                ["WindowTitle"] = "Lexverse Control Center",
+                ["ControlCenter"] = "CONTROL CENTER",
+                ["Settings"] = "Settings",
+                ["SettingsSubtitle"] = "Language and shortcuts",
+                ["Language"] = "LANGUAGE",
+                ["AppLanguage"] = "App language",
+                ["Shortcuts"] = "SHORTCUTS",
+                ["ShortcutHint"] = "Click a shortcut, then press the new key combination.",
+                ["ShortcutPressHint"] = "Press the new shortcut. Esc cancels.",
+                ["ShortcutListening"] = "Press keys...",
+                ["ShortcutDuplicate"] = "{0} is already used by another shortcut.",
+                ["ShortcutGlobalConflict"] = "{0} is already used by another app.",
+                ["ShortcutSaved"] = "{0} saved.",
+                ["PopupTranslate"] = "Popup translate",
+                ["RegionTranslate"] = "Region translate",
+                ["FullScreenRealtime"] = "Full screen realtime",
+                ["StopRealtime"] = "Stop realtime",
+                ["ResetOverlay"] = "Reset / clear overlay",
+                ["PopupTooltip"] = "Highlight text in any app, then press {0}",
+                ["SelectedSourceHint"] = "Highlight text in another app, then press {0}.",
+                ["From"] = "FROM",
+                ["To"] = "TO",
+                ["IgnoredTerms"] = "IGNORED TERMS",
+                ["OcrMode"] = "OCR MODE",
+                ["Behavior"] = "BEHAVIOR",
+                ["KeepTerms"] = "Keep acronyms / technical terms",
+                ["ClosePopupOutside"] = "Close popup on outside click",
+                ["AllowPopupDragging"] = "Allow dragging popup",
+                ["ShowOcrDebug"] = "Show OCR debug boxes",
+                ["ShowPopupBeforeDone"] = "Show popup before translation finishes",
+                ["Popup"] = "Popup",
+                ["Region"] = "Region",
+                ["FullScreen"] = "Full screen",
+                ["Stop"] = "Stop",
+                ["PopupMode"] = "Popup Mode",
+                ["Capture"] = "Capture",
+                ["Preview"] = "Preview",
+                ["RealtimeMode"] = "Realtime Mode",
+                ["RealtimeTuning"] = "REALTIME TUNING",
+                ["ScanInterval"] = "Scan interval",
+                ["OverlayOpacity"] = "Overlay opacity",
+                ["TextSize"] = "Text size",
+                ["BlockPalette"] = "Block palette",
+                ["BlackWhite"] = "Black / white",
+                ["MaxOcrFragments"] = "Max OCR fragments",
+                ["Runtime"] = "RUNTIME",
+                ["Hotkey"] = "Hotkey",
+                ["Realtime"] = "Realtime",
+                ["TranslationStyle"] = "TRANSLATION STYLE",
+                ["StatusStopped"] = "Stopped.",
+                ["StatusOverlayCleared"] = "Status: Overlay cleared.",
+                ["StatusReadyHotkey"] = "Status: Ready. Highlight text and press {0}, or choose Region / Full screen.",
+                ["StatusReadyHotkeyConflict"] = "Status: Ready, but {0} is already used by another app.",
+                ["HotkeyRegistered"] = "{0} registered globally",
+                ["HotkeyConflict"] = "{0} is used by another app"
+            },
+            ["vi"] = new Dictionary<string, string>
+            {
+                ["WindowTitle"] = "Trung tâm điều khiển Lexverse",
+                ["ControlCenter"] = "TRUNG TÂM ĐIỀU KHIỂN",
+                ["Settings"] = "Cài đặt",
+                ["SettingsSubtitle"] = "Ngôn ngữ và phím tắt",
+                ["Language"] = "NGÔN NGỮ",
+                ["AppLanguage"] = "Ngôn ngữ ứng dụng",
+                ["Shortcuts"] = "PHÍM TẮT",
+                ["ShortcutHint"] = "Bấm vào một phím tắt, rồi nhấn tổ hợp phím mới.",
+                ["ShortcutPressHint"] = "Nhấn phím tắt mới. Esc để hủy.",
+                ["ShortcutListening"] = "Nhấn phím...",
+                ["ShortcutDuplicate"] = "{0} đã được dùng cho phím tắt khác.",
+                ["ShortcutGlobalConflict"] = "{0} đang được ứng dụng khác sử dụng.",
+                ["ShortcutSaved"] = "Đã lưu {0}.",
+                ["PopupTranslate"] = "Dịch popup",
+                ["RegionTranslate"] = "Dịch vùng chọn",
+                ["FullScreenRealtime"] = "Dịch toàn màn hình",
+                ["StopRealtime"] = "Dừng realtime",
+                ["ResetOverlay"] = "Xóa overlay",
+                ["PopupTooltip"] = "Bôi đen văn bản trong app khác, rồi nhấn {0}",
+                ["SelectedSourceHint"] = "Bôi đen văn bản trong app khác, rồi nhấn {0}.",
+                ["From"] = "TỪ",
+                ["To"] = "SANG",
+                ["IgnoredTerms"] = "TỪ BỎ QUA",
+                ["OcrMode"] = "CHẾ ĐỘ OCR",
+                ["Behavior"] = "HÀNH VI",
+                ["KeepTerms"] = "Giữ acronym / thuật ngữ kỹ thuật",
+                ["ClosePopupOutside"] = "Đóng popup khi bấm bên ngoài",
+                ["AllowPopupDragging"] = "Cho phép kéo popup",
+                ["ShowOcrDebug"] = "Hiện khung debug OCR",
+                ["ShowPopupBeforeDone"] = "Hiện popup trước khi dịch xong",
+                ["Popup"] = "Popup",
+                ["Region"] = "Vùng",
+                ["FullScreen"] = "Toàn màn hình",
+                ["Stop"] = "Dừng",
+                ["PopupMode"] = "Chế độ Popup",
+                ["Capture"] = "Dịch",
+                ["Preview"] = "Xem thử",
+                ["RealtimeMode"] = "Chế độ Realtime",
+                ["RealtimeTuning"] = "TINH CHỈNH REALTIME",
+                ["ScanInterval"] = "Chu kỳ quét",
+                ["OverlayOpacity"] = "Độ mờ overlay",
+                ["TextSize"] = "Cỡ chữ",
+                ["BlockPalette"] = "Bảng màu khối",
+                ["BlackWhite"] = "Đen / trắng",
+                ["MaxOcrFragments"] = "Số mảnh OCR tối đa",
+                ["Runtime"] = "TRẠNG THÁI",
+                ["Hotkey"] = "Phím tắt",
+                ["Realtime"] = "Realtime",
+                ["TranslationStyle"] = "VĂN PHONG DỊCH",
+                ["StatusStopped"] = "Đã dừng.",
+                ["StatusOverlayCleared"] = "Trạng thái: Đã xóa overlay.",
+                ["StatusReadyHotkey"] = "Trạng thái: Sẵn sàng. Bôi đen văn bản và nhấn {0}, hoặc chọn Vùng / Toàn màn hình.",
+                ["StatusReadyHotkeyConflict"] = "Trạng thái: Sẵn sàng, nhưng {0} đang được ứng dụng khác sử dụng.",
+                ["HotkeyRegistered"] = "{0} đã đăng ký toàn cục",
+                ["HotkeyConflict"] = "{0} đang được ứng dụng khác sử dụng"
+            }
+        };
 
     private readonly ObservableCollection<TextItem> _overlayItems = [];
+    private readonly AppUserSettings _userSettings = AppUserSettings.Load();
     private readonly Lazy<ITextTranslator> _popupTranslator = new(() => new GoogleCloudTextTranslator());
     private PopupKeywordExplainer? _popupKeywordExplainer;
     private GraphicsCaptureItem? _captureItem;
@@ -66,12 +189,17 @@ public partial class MainWindow : Window
     private HwndSource? _hwndSource;
     private bool _isSelectingRegion;
     private bool _isHotkeyRegistered;
+    private bool _isUpdatingSettingsUi;
+    private ShortcutAction? _capturingShortcutAction;
     private OverlayRenderFrame? _lastOverlayFrame;
     private double _overlayFontScale = 1;
 
     public MainWindow()
     {
         InitializeComponent();
+        LoadSettingsIntoUi();
+        ApplyAppLanguage();
+        RefreshShortcutButtons();
         KeyDown += MainWindow_KeyDown;
         UpdateFontSizeControls();
     }
@@ -124,6 +252,62 @@ public partial class MainWindow : Window
     private void CloseWindow_Click(object sender, RoutedEventArgs e)
     {
         Close();
+    }
+
+    private void OpenSettings_Click(object sender, RoutedEventArgs e)
+    {
+        ShortcutErrorText.Text = string.Empty;
+        RefreshShortcutButtons();
+        SettingsOverlay.Visibility = Visibility.Visible;
+    }
+
+    private void CloseSettings_Click(object sender, RoutedEventArgs e)
+    {
+        CloseSettingsPanel();
+    }
+
+    private void SettingsOverlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        CloseSettingsPanel();
+    }
+
+    private void SettingsPanel_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+    }
+
+    private void CloseSettingsPanel()
+    {
+        CancelShortcutCapture();
+        SettingsOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private void AppLanguageBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingSettingsUi ||
+            AppLanguageBox.SelectedItem is not ComboBoxItem { Tag: { } tag })
+        {
+            return;
+        }
+
+        _userSettings.AppLanguage = tag.ToString() ?? "en";
+        _userSettings.Save();
+        ApplyAppLanguage();
+    }
+
+    private void ShortcutButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: { } tag } ||
+            !Enum.TryParse<ShortcutAction>(tag.ToString(), out var action))
+        {
+            return;
+        }
+
+        _capturingShortcutAction = action;
+        ShortcutErrorText.Foreground = FindResource("PrimaryBrush") as System.Windows.Media.Brush;
+        ShortcutErrorText.Text = T("ShortcutPressHint");
+        RefreshShortcutButtons();
+        Focus();
     }
 
     private void ToggleWindowState()
@@ -256,7 +440,394 @@ public partial class MainWindow : Window
     private async void StopButton_Click(object sender, RoutedEventArgs e)
     {
         await StopPipelineAsync();
-        StatusText.Text = "Stopped.";
+        StatusText.Text = T("StatusStopped");
+    }
+
+    private void LoadSettingsIntoUi()
+    {
+        _isUpdatingSettingsUi = true;
+        try
+        {
+            SelectComboBoxItemByTag(AppLanguageBox, _userSettings.AppLanguage);
+        }
+        finally
+        {
+            _isUpdatingSettingsUi = false;
+        }
+    }
+
+    private static void SelectComboBoxItemByTag(ComboBox comboBox, string tagValue)
+    {
+        foreach (var item in comboBox.Items.OfType<ComboBoxItem>())
+        {
+            if (string.Equals(item.Tag?.ToString(), tagValue, StringComparison.OrdinalIgnoreCase))
+            {
+                comboBox.SelectedItem = item;
+                return;
+            }
+        }
+
+        comboBox.SelectedIndex = 0;
+    }
+
+    private void RefreshShortcutButtons()
+    {
+        foreach (var action in Enum.GetValues<ShortcutAction>())
+        {
+            var button = GetShortcutButton(action);
+            button.Content = _capturingShortcutAction == action
+                ? T("ShortcutListening")
+                : _userSettings.GetShortcut(action).DisplayText();
+        }
+    }
+
+    private Button GetShortcutButton(ShortcutAction action)
+    {
+        return action switch
+        {
+            ShortcutAction.PopupTranslate => PopupShortcutButton,
+            ShortcutAction.RegionTranslate => RegionShortcutButton,
+            ShortcutAction.FullScreenRealtime => FullScreenShortcutButton,
+            ShortcutAction.StopRealtime => StopShortcutButton,
+            ShortcutAction.ResetOverlay => ResetShortcutButton,
+            _ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
+        };
+    }
+
+    private async Task<bool> HandleAppShortcutAsync(KeyEventArgs e)
+    {
+        if (_capturingShortcutAction is not null)
+        {
+            CaptureShortcut(e);
+            return true;
+        }
+
+        if (SettingsOverlay.Visibility == Visibility.Visible && NormalizeShortcutKey(e) == Key.Escape)
+        {
+            CloseSettingsPanel();
+            return true;
+        }
+
+        var gesture = ShortcutGesture.FromKeyEvent(e);
+        if (gesture.IsEmpty || ShouldIgnoreShortcutForFocusedElement(gesture))
+        {
+            return false;
+        }
+
+        if (gesture == _userSettings.GetShortcut(ShortcutAction.PopupTranslate))
+        {
+            await TranslateHighlightedTextWithPopupAsync();
+            return true;
+        }
+
+        if (gesture == _userSettings.GetShortcut(ShortcutAction.RegionTranslate))
+        {
+            await StartRegionRealtimeAsync();
+            return true;
+        }
+
+        if (gesture == _userSettings.GetShortcut(ShortcutAction.FullScreenRealtime))
+        {
+            await StartFullScreenRealtimeAsync();
+            return true;
+        }
+
+        if (gesture == _userSettings.GetShortcut(ShortcutAction.StopRealtime))
+        {
+            await StopPipelineAsync();
+            StatusText.Text = T("StatusStopped");
+            return true;
+        }
+
+        if (gesture == _userSettings.GetShortcut(ShortcutAction.ResetOverlay))
+        {
+            ResetOverlay();
+            return true;
+        }
+
+        return false;
+    }
+
+    private void CaptureShortcut(KeyEventArgs e)
+    {
+        var action = _capturingShortcutAction;
+        if (action is null)
+        {
+            return;
+        }
+
+        var key = NormalizeShortcutKey(e);
+        if (key == Key.Escape)
+        {
+            CancelShortcutCapture();
+            return;
+        }
+
+        if (IsModifierKey(key))
+        {
+            return;
+        }
+
+        var gesture = ShortcutGesture.FromKeyEvent(e);
+        if (gesture.IsEmpty)
+        {
+            return;
+        }
+
+        var duplicate = Enum.GetValues<ShortcutAction>()
+            .Where(candidate => candidate != action)
+            .FirstOrDefault(candidate => _userSettings.GetShortcut(candidate) == gesture);
+        if (duplicate != default || (action != ShortcutAction.PopupTranslate &&
+                                    _userSettings.GetShortcut(ShortcutAction.PopupTranslate) == gesture))
+        {
+            ShortcutErrorText.Foreground = FindResource("WarningBrush") as System.Windows.Media.Brush;
+            ShortcutErrorText.Text = string.Format(T("ShortcutDuplicate"), gesture.DisplayText());
+            RefreshShortcutButtons();
+            return;
+        }
+
+        if (action == ShortcutAction.PopupTranslate && !TryApplyPopupHotkey(gesture))
+        {
+            ShortcutErrorText.Foreground = FindResource("WarningBrush") as System.Windows.Media.Brush;
+            ShortcutErrorText.Text = string.Format(T("ShortcutGlobalConflict"), gesture.DisplayText());
+            RefreshShortcutButtons();
+            return;
+        }
+
+        _userSettings.SetShortcut(action.Value, gesture);
+        _userSettings.Save();
+        _capturingShortcutAction = null;
+        ShortcutErrorText.Foreground = FindResource("SuccessBrush") as System.Windows.Media.Brush;
+        ShortcutErrorText.Text = string.Format(T("ShortcutSaved"), gesture.DisplayText());
+        RefreshShortcutButtons();
+        UpdateHotkeyRuntimeText();
+    }
+
+    private void CancelShortcutCapture()
+    {
+        if (_capturingShortcutAction is null)
+        {
+            return;
+        }
+
+        _capturingShortcutAction = null;
+        ShortcutErrorText.Text = string.Empty;
+        RefreshShortcutButtons();
+    }
+
+    private bool TryApplyPopupHotkey(ShortcutGesture gesture)
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero)
+        {
+            return true;
+        }
+
+        var previous = _userSettings.GetShortcut(ShortcutAction.PopupTranslate);
+        if (_isHotkeyRegistered)
+        {
+            UnregisterHotKey(handle, HotkeyId);
+            _isHotkeyRegistered = false;
+        }
+
+        if (TryRegisterHotKey(handle, gesture))
+        {
+            _isHotkeyRegistered = true;
+            return true;
+        }
+
+        _isHotkeyRegistered = TryRegisterHotKey(handle, previous);
+        UpdateHotkeyRuntimeText();
+        return false;
+    }
+
+    private bool TryRegisterHotKey(IntPtr handle, ShortcutGesture gesture)
+    {
+        if (gesture.IsEmpty)
+        {
+            return false;
+        }
+
+        var virtualKey = KeyInterop.VirtualKeyFromKey(gesture.Key);
+        if (virtualKey <= 0)
+        {
+            return false;
+        }
+
+        return RegisterHotKey(handle, HotkeyId, BuildHotkeyModifiers(gesture.Modifiers), (uint)virtualKey);
+    }
+
+    private static uint BuildHotkeyModifiers(ModifierKeys modifiers)
+    {
+        var nativeModifiers = ModNoRepeat;
+        if (modifiers.HasFlag(ModifierKeys.Control))
+        {
+            nativeModifiers |= ModControl;
+        }
+
+        if (modifiers.HasFlag(ModifierKeys.Alt))
+        {
+            nativeModifiers |= ModAlt;
+        }
+
+        if (modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            nativeModifiers |= ModShift;
+        }
+
+        return nativeModifiers;
+    }
+
+    private static bool ShouldIgnoreShortcutForFocusedElement(ShortcutGesture gesture)
+    {
+        var focused = Keyboard.FocusedElement as DependencyObject;
+        if (focused is null)
+        {
+            return false;
+        }
+
+        var isTextInput = IsWithinFocusedElement<TextBoxBase>(focused) ||
+                          IsWithinFocusedElement<ComboBox>(focused);
+        return isTextInput &&
+               gesture.Modifiers == ModifierKeys.None &&
+               gesture.Key is >= Key.A and <= Key.Z;
+    }
+
+    private static bool IsWithinFocusedElement<T>(DependencyObject source)
+        where T : DependencyObject
+    {
+        var current = source;
+        while (current is not null)
+        {
+            if (current is T)
+            {
+                return true;
+            }
+
+            current = GetDependencyObjectParent(current);
+        }
+
+        return false;
+    }
+
+    private static bool IsModifierKey(Key key)
+    {
+        return key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+            or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin
+            or Key.System;
+    }
+
+    private static Key NormalizeShortcutKey(KeyEventArgs e)
+    {
+        return e.Key switch
+        {
+            Key.System => e.SystemKey,
+            Key.ImeProcessed => e.ImeProcessedKey,
+            Key.DeadCharProcessed => e.DeadCharProcessedKey,
+            _ => e.Key
+        };
+    }
+
+    private void ResetOverlay()
+    {
+        _lastOverlayFrame = null;
+        _overlayItems.Clear();
+        _overlayWindow?.Hide();
+        StatusText.Text = T("StatusOverlayCleared");
+    }
+
+    private void ApplyAppLanguage()
+    {
+        Title = T("WindowTitle");
+        AppSubtitleText.Text = T("ControlCenter");
+        HeaderPopupText.Text = T("Popup");
+        RegionButton.Content = T("Region");
+        HeaderFullScreenText.Text = T("FullScreen");
+        HeaderStopText.Text = T("Stop");
+        SettingsButton.ToolTip = T("Settings");
+
+        LanguageSectionText.Text = T("Language");
+        FromLabelText.Text = T("From");
+        ToLabelText.Text = T("To");
+        IgnoredTermsLabelText.Text = T("IgnoredTerms");
+        OcrModeLabelText.Text = T("OcrMode");
+        BehaviorSectionText.Text = T("Behavior");
+        KeepTermsCheck.Content = T("KeepTerms");
+        ClosePopupOnOutsideClickBox.Content = T("ClosePopupOutside");
+        AllowDraggingPopupBox.Content = T("AllowPopupDragging");
+        DebugOverlayBox.Content = T("ShowOcrDebug");
+        ShowPopupBeforeTranslationFinishesBox.Content = T("ShowPopupBeforeDone");
+
+        PopupModeTitleText.Text = T("PopupMode");
+        PopupCaptureText.Text = T("Capture");
+        PopupPreviewText.Text = T("Preview");
+        RealtimeModeTitleText.Text = T("RealtimeMode");
+        RealtimeRegionButton.Content = T("Region");
+        RealtimeFullScreenText.Text = T("FullScreen");
+        RealtimeStopText.Text = T("Stop");
+        RealtimeTuningTitleText.Text = T("RealtimeTuning");
+        ScanIntervalLabelText.Text = T("ScanInterval");
+        OverlayOpacityLabelText.Text = T("OverlayOpacity");
+        TextSizeLabelText.Text = T("TextSize");
+        BlockPaletteLabelText.Text = T("BlockPalette");
+        BlackOverlayBlocksBox.Content = T("BlackWhite");
+        MaxOcrFragmentsLabelText.Text = T("MaxOcrFragments");
+
+        RuntimeTitleText.Text = T("Runtime");
+        HotkeyRuntimeLabelText.Text = T("Hotkey");
+        PopupRuntimeLabelText.Text = T("Popup");
+        RealtimeRuntimeLabelText.Text = T("Realtime");
+        RegionRuntimeLabelText.Text = T("Region");
+        TranslationStyleTitleText.Text = T("TranslationStyle");
+
+        SettingsTitleText.Text = T("Settings");
+        SettingsSubtitleText.Text = T("SettingsSubtitle");
+        SettingsLanguageTitleText.Text = T("Language");
+        AppLanguageLabelText.Text = T("AppLanguage");
+        SettingsShortcutsTitleText.Text = T("Shortcuts");
+        ShortcutHintText.Text = T("ShortcutHint");
+        PopupShortcutLabelText.Text = T("PopupTranslate");
+        RegionShortcutLabelText.Text = T("RegionTranslate");
+        FullScreenShortcutLabelText.Text = T("FullScreenRealtime");
+        StopShortcutLabelText.Text = T("StopRealtime");
+        ResetShortcutLabelText.Text = T("ResetOverlay");
+
+        PopupHotkeyButton.ToolTip = string.Format(
+            T("PopupTooltip"),
+            _userSettings.GetShortcut(ShortcutAction.PopupTranslate).DisplayText());
+        SelectedSourceText.Text = string.Format(
+            T("SelectedSourceHint"),
+            _userSettings.GetShortcut(ShortcutAction.PopupTranslate).DisplayText());
+        UpdateHotkeyRuntimeText();
+        RefreshShortcutButtons();
+    }
+
+    private void UpdateHotkeyRuntimeText()
+    {
+        var shortcut = _userSettings.GetShortcut(ShortcutAction.PopupTranslate);
+        var displayText = shortcut.DisplayText();
+
+        PopupHotkeyBadgeText.Text = displayText;
+        HotkeyRuntimeText.Text = _isHotkeyRegistered
+            ? string.Format(T("HotkeyRegistered"), displayText)
+            : string.Format(T("HotkeyConflict"), displayText);
+        PopupHotkeyButton.ToolTip = string.Format(T("PopupTooltip"), displayText);
+
+        StatusText.Text = _isHotkeyRegistered
+            ? string.Format(T("StatusReadyHotkey"), displayText)
+            : string.Format(T("StatusReadyHotkeyConflict"), displayText);
+    }
+
+    private string T(string key)
+    {
+        var language = _userSettings.AppLanguage.Equals("vi", StringComparison.OrdinalIgnoreCase)
+            ? "vi"
+            : "en";
+
+        return LocalizedText.TryGetValue(language, out var languageMap) &&
+               languageMap.TryGetValue(key, out var value)
+            ? value
+            : LocalizedText["en"][key];
     }
 
     private async Task TranslateHighlightedTextWithPopupAsync()
@@ -267,13 +838,17 @@ public partial class MainWindow : Window
         var cancellationToken = _popupTranslationCancellation.Token;
 
         PopupRuntimeText.Text = "Reading selection";
-        StatusText.Text = "Status: Reading highlighted text. Keep the text selected and press F6.";
+        StatusText.Text = string.Format(
+            T("StatusReadyHotkey"),
+            _userSettings.GetShortcut(ShortcutAction.PopupTranslate).DisplayText());
 
         var sourceText = await TryReadHighlightedTextAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(sourceText))
         {
             PopupRuntimeText.Text = "No selected text";
-            StatusText.Text = "Status: No highlighted text was copied. Select text in another app, then press F6.";
+            StatusText.Text = string.Format(
+                T("StatusReadyHotkey"),
+                _userSettings.GetShortcut(ShortcutAction.PopupTranslate).DisplayText());
             return;
         }
 
@@ -1069,14 +1644,10 @@ public partial class MainWindow : Window
         var handle = new WindowInteropHelper(this).Handle;
         _hwndSource = HwndSource.FromHwnd(handle);
         _hwndSource?.AddHook(WndProc);
-        _isHotkeyRegistered = RegisterHotKey(handle, HotkeyId, ModNoRepeat, VkF6);
-
-        HotkeyRuntimeText.Text = _isHotkeyRegistered
-            ? "F6 registered globally"
-            : "F6 is used by another app";
-        StatusText.Text = _isHotkeyRegistered
-            ? "Status: Ready. Highlight text and press F6, or choose Region / Full screen."
-            : "Status: Ready, but F6 global hotkey is already used by another app.";
+        _isHotkeyRegistered = TryRegisterHotKey(
+            handle,
+            _userSettings.GetShortcut(ShortcutAction.PopupTranslate));
+        UpdateHotkeyRuntimeText();
     }
 
     protected override async void OnClosed(EventArgs e)
@@ -1109,9 +1680,9 @@ public partial class MainWindow : Window
 
     private async void MainWindow_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.F6)
+        if (await HandleAppShortcutAsync(e))
         {
-            await TranslateHighlightedTextWithPopupAsync();
+            e.Handled = true;
         }
     }
 

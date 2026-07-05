@@ -118,6 +118,12 @@
             <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
         </Style>
 
+        <Style x:Key="ShortcutButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="MinWidth" Value="136"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="12,7"/>
+        </Style>
+
         <Style x:Key="WindowChromeButton" TargetType="Button">
             <Setter Property="Width" Value="36"/>
             <Setter Property="Height" Value="34"/>
@@ -455,7 +461,8 @@
                                            Foreground="{StaticResource WhiteTextBrush}"/>
                                 <TextBlock Text="CONTROL CENTER"
                                            Foreground="{StaticResource MutedTextBrush}"
-                                           FontSize="12"/>
+                                            FontSize="12"
+                                            x:Name="AppSubtitleText"/>
                             </StackPanel>
                         </StackPanel>
 
@@ -470,12 +477,14 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource IconGlyph}"
                                                Text="&#xE7F4;"/>
-                                    <TextBlock Text="Popup"/>
+                                    <TextBlock x:Name="HeaderPopupText"
+                                               Text="Popup"/>
                                     <Border Background="#AE7E37"
                                             CornerRadius="6"
                                             Padding="6,2"
                                             Margin="10,0,0,0">
-                                        <TextBlock Text="F6"
+                                        <TextBlock x:Name="PopupHotkeyBadgeText"
+                                                   Text="F6"
                                                    FontSize="12"
                                                    Foreground="#20160B"/>
                                     </Border>
@@ -493,7 +502,8 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource IconGlyph}"
                                                Text="&#xE740;"/>
-                                    <TextBlock Text="Full screen"/>
+                                    <TextBlock x:Name="HeaderFullScreenText"
+                                               Text="Full screen"/>
                                 </StackPanel>
                             </Button>
                             <Button x:Name="StopButton"
@@ -504,8 +514,21 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource IconGlyph}"
                                                Text="&#xE71A;"/>
-                                    <TextBlock Text="Stop"/>
+                                    <TextBlock x:Name="HeaderStopText"
+                                               Text="Stop"/>
                                 </StackPanel>
+                            </Button>
+                            <Button x:Name="SettingsButton"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Width="48"
+                                    Padding="0"
+                                    Click="OpenSettings_Click"
+                                    ToolTip="Settings">
+                                <TextBlock Text="&#xE713;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="15"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
                             </Button>
                         </StackPanel>
 
@@ -550,9 +573,11 @@
                             Padding="20,22">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource SectionLabelText}"
+                                <TextBlock x:Name="LanguageSectionText"
+                                           Style="{StaticResource SectionLabelText}"
                                            Text="LANGUAGE"/>
-                                <TextBlock Style="{StaticResource MutedText}"
+                                <TextBlock x:Name="FromLabelText"
+                                           Style="{StaticResource MutedText}"
                                            Margin="0,28,0,8"
                                            Text="FROM"/>
                                 <ComboBox x:Name="OcrLanguageBox"
@@ -564,7 +589,8 @@
                                     <ComboBoxItem Content="Chinese" Tag="zh-CN"/>
                                 </ComboBox>
 
-                                <TextBlock Style="{StaticResource MutedText}"
+                                <TextBlock x:Name="ToLabelText"
+                                           Style="{StaticResource MutedText}"
                                            Margin="0,24,0,8"
                                            Text="TO"/>
                                 <ComboBox x:Name="TargetLanguageBox"
@@ -576,7 +602,8 @@
                                     <ComboBoxItem Content="Korean" Tag="ko"/>
                                 </ComboBox>
 
-                                <TextBlock Style="{StaticResource MutedText}"
+                                <TextBlock x:Name="IgnoredTermsLabelText"
+                                           Style="{StaticResource MutedText}"
                                            Margin="0,24,0,8"
                                            Text="IGNORED TERMS"/>
                                 <TextBox x:Name="IgnoredTermsBox"
@@ -587,7 +614,8 @@
                                          TextChanged="TranslationSettings_TextChanged"
                                          Text="HP, MP, EXP..."/>
 
-                                <TextBlock Style="{StaticResource MutedText}"
+                                <TextBlock x:Name="OcrModeLabelText"
+                                           Style="{StaticResource MutedText}"
                                            Margin="0,24,0,8"
                                            Text="OCR MODE"/>
                                 <ComboBox x:Name="ModeBox"
@@ -603,7 +631,8 @@
                                         Background="#302A24"
                                         Margin="-20,28,-20,22"/>
 
-                                <TextBlock Style="{StaticResource SectionLabelText}"
+                                <TextBlock x:Name="BehaviorSectionText"
+                                           Style="{StaticResource SectionLabelText}"
                                            Text="BEHAVIOR"/>
                                 <CheckBox x:Name="KeepTermsCheck"
                                           Margin="0,18,0,11"
@@ -665,7 +694,8 @@
                                                        FontSize="14"
                                                        FontWeight="Bold"/>
                                         </Border>
-                                        <TextBlock Text="Popup Mode"
+                                        <TextBlock x:Name="PopupModeTitleText"
+                                                   Text="Popup Mode"
                                                    VerticalAlignment="Center"
                                                    Foreground="{StaticResource WhiteTextBrush}"
                                                    FontSize="17"
@@ -689,7 +719,8 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Style="{StaticResource IconGlyph}"
                                                            Text="&#xE722;"/>
-                                                <TextBlock Text="Capture"/>
+                                                <TextBlock x:Name="PopupCaptureText"
+                                                           Text="Capture"/>
                                             </StackPanel>
                                         </Button>
                                         <Button Style="{StaticResource SecondaryButton}"
@@ -697,7 +728,8 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Style="{StaticResource IconGlyph}"
                                                            Text="&#xE890;"/>
-                                                <TextBlock Text="Preview"/>
+                                                <TextBlock x:Name="PopupPreviewText"
+                                                           Text="Preview"/>
                                             </StackPanel>
                                         </Button>
                                     </StackPanel>
@@ -739,7 +771,8 @@
                                                        FontSize="14"
                                                        FontWeight="Bold"/>
                                         </Border>
-                                        <TextBlock Text="Realtime Mode"
+                                        <TextBlock x:Name="RealtimeModeTitleText"
+                                                   Text="Realtime Mode"
                                                    VerticalAlignment="Center"
                                                    Foreground="{StaticResource WhiteTextBrush}"
                                                    FontSize="17"
@@ -759,8 +792,8 @@
                                         <Button x:Name="RealtimeRegionButton"
                                                 Style="{StaticResource SecondaryButton}"
                                                 Click="StartRegionRealtime_Click"
-                                                Content="Region"
-                                                Margin="0,0,10,0"/>
+                                                 Content="Region"
+                                                 Margin="0,0,10,0"/>
                                         <Button x:Name="RealtimeFullScreenButton"
                                                 Style="{StaticResource SecondaryButton}"
                                                 Click="StartFullScreenRealtime_Click"
@@ -768,7 +801,8 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Style="{StaticResource IconGlyph}"
                                                            Text="&#xE740;"/>
-                                                <TextBlock Text="Full screen"/>
+                                                <TextBlock x:Name="RealtimeFullScreenText"
+                                                           Text="Full screen"/>
                                             </StackPanel>
                                         </Button>
                                         <Button x:Name="RealtimeStopButton"
@@ -779,7 +813,8 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Style="{StaticResource IconGlyph}"
                                                            Text="&#xE71A;"/>
-                                                <TextBlock Text="Stop"/>
+                                                <TextBlock x:Name="RealtimeStopText"
+                                                           Text="Stop"/>
                                             </StackPanel>
                                         </Button>
                                     </StackPanel>
@@ -803,7 +838,8 @@
                                     Style="{StaticResource CardBorder}"
                                     Margin="0,0,8,0">
                                 <StackPanel>
-                                    <TextBlock Style="{StaticResource SectionLabelText}"
+                                    <TextBlock x:Name="RealtimeTuningTitleText"
+                                               Style="{StaticResource SectionLabelText}"
                                                Text="REALTIME TUNING"/>
 
                                     <Grid Margin="0,26,0,0">
@@ -820,7 +856,8 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
 
-                                        <TextBlock Text="Scan interval"
+                                        <TextBlock x:Name="ScanIntervalLabelText"
+                                                   Text="Scan interval"
                                                    Foreground="{StaticResource WhiteTextBrush}"/>
                                         <TextBlock Grid.Column="1"
                                                    Text="500ms"
@@ -830,7 +867,8 @@
                                                 Value="24"
                                                 Margin="0,4,0,18"/>
 
-                                        <TextBlock Grid.Row="2"
+                                        <TextBlock x:Name="OverlayOpacityLabelText"
+                                                   Grid.Row="2"
                                                    Text="Overlay opacity"
                                                    Foreground="{StaticResource WhiteTextBrush}"/>
                                         <TextBlock Grid.Row="2"
@@ -842,7 +880,8 @@
                                                 Value="85"
                                                 Margin="0,4,0,18"/>
 
-                                        <TextBlock Grid.Row="4"
+                                        <TextBlock x:Name="TextSizeLabelText"
+                                                   Grid.Row="4"
                                                    Text="Text size"
                                                    Foreground="{StaticResource WhiteTextBrush}"/>
                                         <TextBlock x:Name="FontSizeScaleText"
@@ -884,7 +923,8 @@
                                         </Grid>
                                     </Grid>
 
-                                    <TextBlock Margin="0,28,0,10"
+                                    <TextBlock x:Name="BlockPaletteLabelText"
+                                               Margin="0,28,0,10"
                                                Text="Block palette"
                                                Foreground="{StaticResource WhiteTextBrush}"/>
                                     <Border Background="#2A261F"
@@ -898,7 +938,8 @@
                                                   Content="Black / white"/>
                                     </Border>
 
-                                    <TextBlock Margin="0,24,0,4"
+                                    <TextBlock x:Name="MaxOcrFragmentsLabelText"
+                                               Margin="0,24,0,4"
                                                Text="Max OCR fragments"
                                                Foreground="{StaticResource WhiteTextBrush}"/>
                                     <Slider Value="24"/>
@@ -916,7 +957,8 @@
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Style="{StaticResource SectionLabelText}"
+                                    <TextBlock x:Name="RuntimeTitleText"
+                                               Style="{StaticResource SectionLabelText}"
                                                Text="RUNTIME"/>
 
                                     <Grid Grid.Row="1"
@@ -945,7 +987,8 @@
                                                        VerticalAlignment="Center"
                                                        FontSize="11"/>
                                         </Border>
-                                        <TextBlock Grid.Column="1"
+                                        <TextBlock x:Name="HotkeyRuntimeLabelText"
+                                                   Grid.Column="1"
                                                    Text="Hotkey"
                                                    Foreground="{StaticResource WhiteTextBrush}"/>
                                         <TextBlock x:Name="HotkeyRuntimeText"
@@ -967,7 +1010,8 @@
                                                        VerticalAlignment="Center"
                                                        FontSize="11"/>
                                         </Border>
-                                        <TextBlock Grid.Row="1"
+                                        <TextBlock x:Name="PopupRuntimeLabelText"
+                                                   Grid.Row="1"
                                                    Grid.Column="1"
                                                    Margin="0,14,0,0"
                                                    Text="Popup"
@@ -992,7 +1036,8 @@
                                                      HorizontalAlignment="Center"
                                                      VerticalAlignment="Center"/>
                                         </Border>
-                                        <TextBlock Grid.Row="2"
+                                        <TextBlock x:Name="RealtimeRuntimeLabelText"
+                                                   Grid.Row="2"
                                                    Grid.Column="1"
                                                    Margin="0,14,0,0"
                                                    Text="Realtime"
@@ -1018,7 +1063,8 @@
                                                        VerticalAlignment="Center"
                                                        FontSize="11"/>
                                         </Border>
-                                        <TextBlock Grid.Row="3"
+                                        <TextBlock x:Name="RegionRuntimeLabelText"
+                                                   Grid.Row="3"
                                                    Grid.Column="1"
                                                    Margin="0,14,0,0"
                                                    Text="Region"
@@ -1033,7 +1079,8 @@
 
                                     <StackPanel Grid.Row="2"
                                                 Margin="0,8,0,0">
-                                        <TextBlock Style="{StaticResource SectionLabelText}"
+                                        <TextBlock x:Name="TranslationStyleTitleText"
+                                                   Style="{StaticResource SectionLabelText}"
                                                    Text="TRANSLATION STYLE"/>
                                         <TextBox x:Name="TranslationPromptBox"
                                                  Style="{StaticResource LightTextBox}"
@@ -1090,5 +1137,169 @@
                 </Border>
             </Grid>
         </Border>
+
+        <Grid x:Name="SettingsOverlay"
+              Panel.ZIndex="20"
+              Visibility="Collapsed"
+              Background="#AA080706"
+              MouseLeftButtonDown="SettingsOverlay_MouseLeftButtonDown">
+            <Border Width="520"
+                    HorizontalAlignment="Right"
+                    Margin="0"
+                    Background="#14110E"
+                    BorderBrush="{StaticResource StrokeBrush}"
+                    BorderThickness="1,0,0,0"
+                    Padding="24"
+                    MouseLeftButtonDown="SettingsPanel_MouseLeftButtonDown">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock x:Name="SettingsTitleText"
+                                       Text="Settings"
+                                       Foreground="{StaticResource WhiteTextBrush}"
+                                       FontSize="22"
+                                       FontWeight="Bold"/>
+                            <TextBlock x:Name="SettingsSubtitleText"
+                                       Style="{StaticResource MutedText}"
+                                       Margin="0,6,0,0"
+                                       Text="Language and shortcuts"/>
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Style="{StaticResource WindowChromeButton}"
+                                Click="CloseSettings_Click">
+                            <TextBlock Text="&#xE711;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="12"/>
+                        </Button>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1"
+                                  Margin="0,28,0,0"
+                                  VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock x:Name="SettingsLanguageTitleText"
+                                       Style="{StaticResource SectionLabelText}"
+                                       Text="LANGUAGE"/>
+                            <TextBlock x:Name="AppLanguageLabelText"
+                                       Margin="0,14,0,8"
+                                       Foreground="{StaticResource WhiteTextBrush}"
+                                       Text="App language"/>
+                            <ComboBox x:Name="AppLanguageBox"
+                                      Style="{StaticResource LightComboBox}"
+                                      SelectionChanged="AppLanguageBox_SelectionChanged">
+                                <ComboBoxItem Content="English" Tag="en"/>
+                                <ComboBoxItem Content="Tiếng Việt" Tag="vi"/>
+                            </ComboBox>
+
+                            <Border Height="1"
+                                    Background="#302A24"
+                                    Margin="0,28,0,22"/>
+
+                            <TextBlock x:Name="SettingsShortcutsTitleText"
+                                       Style="{StaticResource SectionLabelText}"
+                                       Text="SHORTCUTS"/>
+                            <TextBlock x:Name="ShortcutHintText"
+                                       Style="{StaticResource MutedText}"
+                                       Margin="0,10,0,18"
+                                       Text="Click a shortcut, then press the new key combination."/>
+
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock x:Name="PopupShortcutLabelText"
+                                           Text="Popup translate"
+                                           Foreground="{StaticResource WhiteTextBrush}"
+                                           VerticalAlignment="Center"/>
+                                <Button x:Name="PopupShortcutButton"
+                                        Grid.Column="1"
+                                        Style="{StaticResource ShortcutButton}"
+                                        Tag="PopupTranslate"
+                                        Click="ShortcutButton_Click"/>
+
+                                <TextBlock x:Name="RegionShortcutLabelText"
+                                           Grid.Row="1"
+                                           Margin="0,14,0,0"
+                                           Text="Region translate"
+                                           Foreground="{StaticResource WhiteTextBrush}"
+                                           VerticalAlignment="Center"/>
+                                <Button x:Name="RegionShortcutButton"
+                                        Grid.Row="1"
+                                        Grid.Column="1"
+                                        Margin="0,10,0,0"
+                                        Style="{StaticResource ShortcutButton}"
+                                        Tag="RegionTranslate"
+                                        Click="ShortcutButton_Click"/>
+
+                                <TextBlock x:Name="FullScreenShortcutLabelText"
+                                           Grid.Row="2"
+                                           Margin="0,14,0,0"
+                                           Text="Full screen realtime"
+                                           Foreground="{StaticResource WhiteTextBrush}"
+                                           VerticalAlignment="Center"/>
+                                <Button x:Name="FullScreenShortcutButton"
+                                        Grid.Row="2"
+                                        Grid.Column="1"
+                                        Margin="0,10,0,0"
+                                        Style="{StaticResource ShortcutButton}"
+                                        Tag="FullScreenRealtime"
+                                        Click="ShortcutButton_Click"/>
+
+                                <TextBlock x:Name="StopShortcutLabelText"
+                                           Grid.Row="3"
+                                           Margin="0,14,0,0"
+                                           Text="Stop realtime"
+                                           Foreground="{StaticResource WhiteTextBrush}"
+                                           VerticalAlignment="Center"/>
+                                <Button x:Name="StopShortcutButton"
+                                        Grid.Row="3"
+                                        Grid.Column="1"
+                                        Margin="0,10,0,0"
+                                        Style="{StaticResource ShortcutButton}"
+                                        Tag="StopRealtime"
+                                        Click="ShortcutButton_Click"/>
+
+                                <TextBlock x:Name="ResetShortcutLabelText"
+                                           Grid.Row="4"
+                                           Margin="0,14,0,0"
+                                           Text="Reset / clear overlay"
+                                           Foreground="{StaticResource WhiteTextBrush}"
+                                           VerticalAlignment="Center"/>
+                                <Button x:Name="ResetShortcutButton"
+                                        Grid.Row="4"
+                                        Grid.Column="1"
+                                        Margin="0,10,0,0"
+                                        Style="{StaticResource ShortcutButton}"
+                                        Tag="ResetOverlay"
+                                        Click="ShortcutButton_Click"/>
+                            </Grid>
+
+                            <TextBlock x:Name="ShortcutErrorText"
+                                       Style="{StaticResource MutedText}"
+                                       Margin="0,18,0,0"
+                                       Text=""/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </Window>
