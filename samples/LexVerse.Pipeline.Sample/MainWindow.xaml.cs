@@ -866,26 +866,76 @@ public partial class MainWindow : Window
 
     private TranslationPromptOptions CreateTranslationPromptOptions()
     {
-        return new TranslationPromptOptions(TranslationPromptBox.Text);
+        return new TranslationPromptOptions(
+            TranslationPromptBox is null ? null : TranslationPromptBox.Text,
+            ParseIgnoredTerms(IgnoredTermsBox is null ? null : IgnoredTermsBox.Text),
+            KeepTermsCheck?.IsChecked == true);
     }
 
-    private void TranslationPromptBox_TextChanged(object sender, TextChangedEventArgs e)
+    private static IReadOnlyList<string> ParseIgnoredTerms(string? rawTerms)
+    {
+        if (string.IsNullOrWhiteSpace(rawTerms))
+        {
+            return [];
+        }
+
+        return rawTerms
+            .Split([',', ';', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(NormalizeIgnoredTermInput)
+            .Where(term => term.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static string NormalizeIgnoredTermInput(string term)
+    {
+        var normalized = term.Trim();
+        if (normalized.EndsWith("...", StringComparison.Ordinal))
+        {
+            normalized = normalized[..^3].TrimEnd();
+        }
+
+        return normalized;
+    }
+
+    private void TranslationSettings_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        UpdateTranslationSettingsStatus();
+    }
+
+    private void TranslationSettings_CheckedChanged(object sender, RoutedEventArgs e)
+    {
+        UpdateTranslationSettingsStatus();
+    }
+
+    private void UpdateTranslationSettingsStatus()
     {
         if (TranslationPromptRuntimeText is null)
         {
             return;
         }
 
-        var promptOptions = new TranslationPromptOptions((sender as TextBox)?.Text);
-        TranslationPromptRuntimeText.Text = promptOptions.HasInstruction
-            ? "Custom prompt"
-            : "Default";
+        var promptOptions = CreateTranslationPromptOptions();
+        var labels = new List<string>
+        {
+            promptOptions.HasInstruction ? "Custom prompt" : "Default prompt"
+        };
+
+        if (promptOptions.HasIgnoredTerms)
+        {
+            labels.Add($"{promptOptions.IgnoredTerms.Count} ignored terms");
+        }
+
+        if (promptOptions.PreserveAcronymsAndTechnicalTerms)
+        {
+            labels.Add("Acronyms kept");
+        }
+
+        TranslationPromptRuntimeText.Text = string.Join(" | ", labels);
 
         if (IsLoaded)
         {
-            StatusText.Text = promptOptions.HasInstruction
-                ? "Status: Translation style prompt updated."
-                : "Status: Translation style prompt cleared.";
+            StatusText.Text = "Status: Translation settings updated.";
         }
     }
 

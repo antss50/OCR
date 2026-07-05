@@ -584,6 +584,7 @@
                                          Height="78"
                                          TextWrapping="Wrap"
                                          VerticalContentAlignment="Top"
+                                         TextChanged="TranslationSettings_TextChanged"
                                          Text="HP, MP, EXP..."/>
 
                                 <TextBlock Style="{StaticResource MutedText}"
@@ -607,6 +608,8 @@
                                 <CheckBox x:Name="KeepTermsCheck"
                                           Margin="0,18,0,11"
                                           IsChecked="True"
+                                          Checked="TranslationSettings_CheckedChanged"
+                                          Unchecked="TranslationSettings_CheckedChanged"
                                           Content="Keep acronyms / technical terms"/>
                                 <CheckBox x:Name="ClosePopupOnOutsideClickBox"
                                           IsChecked="True"
@@ -1042,7 +1045,7 @@
                                                  TextWrapping="Wrap"
                                                  VerticalScrollBarVisibility="Auto"
                                                  VerticalContentAlignment="Top"
-                                                 TextChanged="TranslationPromptBox_TextChanged"
+                                                 TextChanged="TranslationSettings_TextChanged"
                                                  Text="Translate naturally and clearly. Keep proper names, technical terms, HP/MP/EXP unchanged. Do not add explanations."/>
                                         <TextBlock x:Name="TranslationPromptRuntimeText"
                                                    Style="{StaticResource MutedText}"

@@ -173,6 +173,11 @@ public sealed class RealtimeTranslationPipeline
                      .Select((block, index) => (block, index))
                      .Where(item => !string.IsNullOrWhiteSpace(item.block.SourceText)))
         {
+            if (TranslationTermProtector.ShouldIgnoreDetectedText(block.SourceText, _options.TranslationPrompt))
+            {
+                continue;
+            }
+
             var normalizedText = NormalizeText(block.SourceText);
             var cacheKey = new TranslationCacheKey(
                 normalizedText,

@@ -52,16 +52,6 @@ public sealed class GoogleCloudTextTranslator : ITextTranslator
             response.DetectedSourceLanguage ?? sourceLanguage);
     }
 
-    public Task<TextTranslationResult> TranslateAsync(
-        string text,
-        string targetLanguage,
-        string? sourceLanguage,
-        TranslationPromptOptions? promptOptions,
-        CancellationToken cancellationToken = default)
-    {
-        return TranslateAsync(text, targetLanguage, sourceLanguage, cancellationToken);
-    }
-
     public async Task<IReadOnlyList<TextTranslationResult>> TranslateBatchAsync(
         IReadOnlyList<string> texts,
         string targetLanguage,
@@ -125,13 +115,32 @@ public sealed class GoogleCloudTextTranslator : ITextTranslator
         return results;
     }
 
-    public Task<IReadOnlyList<TextTranslationResult>> TranslateBatchAsync(
+    public async Task<IReadOnlyList<TextTranslationResult>> TranslateBatchAsync(
         IReadOnlyList<string> texts,
         string targetLanguage,
         string? sourceLanguage,
         TranslationPromptOptions? promptOptions,
         CancellationToken cancellationToken = default)
     {
-        return TranslateBatchAsync(texts, targetLanguage, sourceLanguage, cancellationToken);
+        ArgumentNullException.ThrowIfNull(texts);
+
+        var protectedTexts = texts
+            .Select(text => TranslationTermProtector.Protect(text, promptOptions))
+            .ToArray();
+        var translatedResults = await TranslateBatchAsync(
+            protectedTexts.Select(item => item.Text).ToArray(),
+            targetLanguage,
+            sourceLanguage,
+            cancellationToken);
+
+        if (translatedResults.Count != protectedTexts.Length)
+        {
+            throw new InvalidOperationException(
+                $"Translator returned {translatedResults.Count} result(s) for {protectedTexts.Length} text item(s).");
+        }
+
+        return translatedResults
+            .Select((result, index) => protectedTexts[index].Restore(result))
+            .ToArray();
     }
 }

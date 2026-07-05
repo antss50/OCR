@@ -71,6 +71,36 @@ public sealed class RealtimeTranslationPipelineCacheTests
         Assert.NotEqual(translator.PromptKeys[0], translator.PromptKeys[1]);
     }
 
+    [Fact]
+    public async Task CaptureRecognizeAndTranslateAsync_WithIgnoredGameStats_SuppressesIgnoredBlocks()
+    {
+        var captureSession = new FakeCaptureSession(CreateFrame());
+        var ocrService = new FakeOcrService(
+            CreateTextBlock("HP", 1),
+            CreateTextBlock("FPS 60", 5),
+            CreateTextBlock("hello", 9));
+        var translator = new FakeTextTranslator();
+        var pipeline = new RealtimeTranslationPipeline(
+            captureSession,
+            new ExactFrameChangeDetector(),
+            ocrService,
+            translator,
+            new InMemoryTranslationCache(),
+            RealtimeTranslationOptions.Document with
+            {
+                TranslationPrompt = new TranslationPromptOptions(
+                    ignoredTerms: ["HP", "MP", "EXP", "FPS"],
+                    preserveAcronymsAndTechnicalTerms: true)
+            });
+
+        var result = await pipeline.CaptureRecognizeAndTranslateAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, translator.CallCount);
+        Assert.Single(result.TranslatedBlocks);
+        Assert.Single(result.OverlayFrame.Items);
+        Assert.Equal("hello", result.TranslatedBlocks[0].SourceText);
+    }
+
     private static CapturedFrame CreateFrame()
     {
         var width = 16;
@@ -103,6 +133,13 @@ public sealed class RealtimeTranslationPipelineCacheTests
             new CaptureSourceInfo(CaptureSourceKind.Picker, "test"));
     }
 
+    private static OcrTextBlock CreateTextBlock(string text, int x)
+    {
+        var bounds = new BoundingBox(x, 1, 4, 3);
+        var word = new OcrWord(text, bounds, 12);
+        return new OcrTextBlock(text, bounds, [word], 12);
+    }
+
     private sealed class FakeCaptureSession(params CapturedFrame[] frames) : IScreenCaptureSession
     {
         private readonly Queue<CapturedFrame> _frames = new(frames);
@@ -118,17 +155,18 @@ public sealed class RealtimeTranslationPipelineCacheTests
         }
     }
 
-    private sealed class FakeOcrService : IOcrService
+    private sealed class FakeOcrService(params OcrTextBlock[] blocks) : IOcrService
     {
         public int CallCount { get; private set; }
 
         public Task<OcrResult> RecognizeAsync(CapturedFrame frame, CancellationToken cancellationToken = default)
         {
             CallCount++;
-            var bounds = new BoundingBox(1, 1, 8, 3);
-            var word = new OcrWord("hello", bounds, 12);
+            var recognizedBlocks = blocks.Length > 0
+                ? blocks
+                : [CreateTextBlock("hello", 1)];
             var result = new OcrResult(
-                [new OcrTextBlock("hello", bounds, [word], 12)],
+                recognizedBlocks,
                 "en-US",
                 0,
                 DateTimeOffset.UtcNow);

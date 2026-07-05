@@ -71,6 +71,8 @@ Key files already present:
 - `src/LexVerse.Core/Geometry/CoordinateMapper.cs`
 - `src/LexVerse.Core/Translation/InMemoryTranslationCache.cs`
 - `src/LexVerse.Core/Translation/TranslationCacheKey.cs`
+- `src/LexVerse.Core/Translation/TranslationPromptOptions.cs`
+- `src/LexVerse.Core/Translation/TranslationTermProtector.cs`
 - `src/LexVerse.Core/Ocr/OcrTextBlockLayoutGrouper.cs`
 - `src/LexVerse.Overlay/PhysicalPixelToDipConverter.cs`
 
@@ -94,8 +96,8 @@ As of this update:
 - `feature/pipeline-integration` tracks `origin/feature/pipeline-integration` and was pushed to GitHub after the UI/new feature merge.
 - `feature/ui-new-features` still exists locally at `dc02f3b` and has no upstream.
 - `codex/overlay-ocr-block-contrast` still exists locally at the merged overlay commit and has no upstream.
-- Latest local committed change is a pipeline sample memory optimization: the UI keeps only the last lightweight overlay frame for font re-rendering instead of the full realtime result with captured pixels.
-- Latest working tree changes add runtime translation style prompt plumbing/UI; these are not committed yet as of this note.
+- Latest local committed change is `27d021c feat: thêm tùy chỉnh văn phong dịch trong runtime`; it sits on top of the earlier RAM optimization commit.
+- Latest working tree changes fix the Control Center `Ignored terms` behavior by suppressing ignored-only OCR blocks from realtime overlays and preserving configured terms/acronyms inside normal sentences; these are not committed yet as of this note.
 - `.gitignore` already ignores common build outputs, Visual Studio state, `.env`, local config, credentials, generated files, and artifacts.
 
 Before changing code in future prompts:
@@ -328,6 +330,19 @@ Use the smallest meaningful verification:
 - Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore` passed: 15 passed, 0 failed, 0 skipped.
 - Caveat: a real AI/Bedrock/OpenAI-style translator still needs to consume `TranslationPromptOptions.Instruction` for visible style changes. The current Google translator keeps behavior unchanged while preserving the plumbing.
 
+### 2026-07-05 Ignored Terms Preservation And Overlay Suppression Fix
+
+- Confirmed `IgnoredTermsBox` was only present in the WPF UI and was not connected to translation behavior.
+- Extended `TranslationPromptOptions` with `IgnoredTerms` and `PreserveAcronymsAndTechnicalTerms`; these values are included in the translation prompt cache key so changing ignored terms does not reuse stale translations.
+- Added `TranslationTermProtector`, which replaces ignored terms/acronyms with stable temporary tokens before provider translation and restores the original terms afterward. This makes ignored terms work with the current Google translator even though Google does not consume style prompts.
+- Added ignored-only OCR suppression in `RealtimeTranslationPipeline`: blocks such as `HP`, `MP 10/20`, `EXP: 45`, `FPS 60`, or `HP, MP, EXP, FPS` are skipped before translation/cache/overlay, while real sentences like `HP increased after battle` still translate and preserve `HP`.
+- Wired the Control Center `IGNORED TERMS` box and `Keep acronyms / technical terms` checkbox into the same options used by Popup/F6, keyword summary localization, Region realtime, and Full screen realtime.
+- Updated Runtime status text to show prompt/ignored-term/acronym-preservation state.
+- Added `TranslationTermProtectorTests` for explicit ignored terms, automatic acronym preservation, ignored-only stat suppression, and sentence preservation.
+- Added a realtime pipeline test proving ignored game-stat OCR blocks are omitted from translated blocks/overlay items.
+- Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore` passed: 24 passed, 0 failed, 0 skipped.
+- Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-ignored-terms` passed with 0 warnings and 0 errors.
+
 ## Next Recommended Work
 
 1. Manually run `samples/LexVerse.Pipeline.Sample`, pick a document app, and confirm translated OCR blocks render as black boxes with white text.
@@ -339,6 +354,7 @@ Use the smallest meaningful verification:
 7. Test Region at the current Windows display scale by dragging a screen area and confirming realtime OCR/translation overlays stay inside the selected physical region.
 8. Test Full screen on the primary/nearest monitor and confirm overlays still align to source coordinates.
 9. Confirm the F6 popup no longer renders source/translation comparison highlights; it should show only the translation and clickable `Important terms`.
-10. Replace the Wikipedia-first keyword explainer with a provider-backed AI annotation service if Bedrock/OpenAI-style popup understanding is added later; keep the current lookup path as a low-cost fallback.
-11. Add a prompt-aware AI translator provider that consumes `TranslationPromptOptions.Instruction`; Google Cloud Translation V2 currently ignores the runtime prompt text.
-12. Review the pushed `feature/pipeline-integration` branch on GitHub before opening or updating a PR.
+10. Test ignored terms live with Popup/F6 and Region realtime, especially multi-word terms and game stats such as HP, MP, and EXP.
+11. Replace the Wikipedia-first keyword explainer with a provider-backed AI annotation service if Bedrock/OpenAI-style popup understanding is added later; keep the current lookup path as a low-cost fallback.
+12. Add a prompt-aware AI translator provider that consumes `TranslationPromptOptions.Instruction`; Google Cloud Translation V2 currently ignores the runtime prompt text.
+13. Review the pushed `feature/pipeline-integration` branch on GitHub before opening or updating a PR.

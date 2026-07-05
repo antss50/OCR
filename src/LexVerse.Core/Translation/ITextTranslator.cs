@@ -8,14 +8,21 @@ public interface ITextTranslator
         string? sourceLanguage = null,
         CancellationToken cancellationToken = default);
 
-    Task<TextTranslationResult> TranslateAsync(
+    async Task<TextTranslationResult> TranslateAsync(
         string text,
         string targetLanguage,
         string? sourceLanguage,
         TranslationPromptOptions? promptOptions,
         CancellationToken cancellationToken = default)
     {
-        return TranslateAsync(text, targetLanguage, sourceLanguage, cancellationToken);
+        var protectedText = TranslationTermProtector.Protect(text, promptOptions);
+        var result = await TranslateAsync(
+            protectedText.Text,
+            targetLanguage,
+            sourceLanguage,
+            cancellationToken);
+
+        return protectedText.Restore(result);
     }
 
     async Task<IReadOnlyList<TextTranslationResult>> TranslateBatchAsync(
