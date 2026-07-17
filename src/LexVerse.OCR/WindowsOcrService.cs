@@ -14,11 +14,16 @@ public sealed class WindowsOcrService : IOcrService
     private const double MinimumHorizontalSplitGap = 22;
 
     private readonly OcrEngine _engine;
+    private readonly OcrTextBlockGroupingMode _groupingMode;
     private readonly OcrTextBlockLayoutGrouper _layoutGrouper = new();
+    private readonly ComicSpeechBubbleGrouper _comicSpeechBubbleGrouper = new();
 
-    public WindowsOcrService(string? languageTag = null)
+    public WindowsOcrService(
+        string? languageTag = null,
+        OcrTextBlockGroupingMode groupingMode = OcrTextBlockGroupingMode.Layout)
     {
         _engine = CreateEngine(languageTag ?? DefaultLanguageTag);
+        _groupingMode = groupingMode;
     }
 
     public async Task<LexVerse.Core.Ocr.OcrResult> RecognizeAsync(CapturedFrame frame, CancellationToken cancellationToken = default)
@@ -57,10 +62,11 @@ public sealed class WindowsOcrService : IOcrService
             .SelectMany(line => line.Words)
             .Select(ToWord)
             .ToArray();
+
         var lineBlocks = BuildVisualTextBlocks(recognizedWords)
             .Where(EnglishOcrTextFilter.IsLikelyTextBlock)
             .ToArray();
-        var blocks = _layoutGrouper.GroupLines(lineBlocks);
+        var blocks = GroupLineBlocks(lineBlocks);
 
         var ocrResult = new LexVerse.Core.Ocr.OcrResult(
             blocks,
@@ -69,6 +75,15 @@ public sealed class WindowsOcrService : IOcrService
             DateTimeOffset.UtcNow);
 
         return new OcrLayoutDebugResult(lineBlocks, ocrResult);
+    }
+
+    private IReadOnlyList<OcrTextBlock> GroupLineBlocks(IReadOnlyList<OcrTextBlock> lineBlocks)
+    {
+        return _groupingMode switch
+        {
+            OcrTextBlockGroupingMode.ComicSpeechBubbles => _comicSpeechBubbleGrouper.GroupLines(lineBlocks),
+            _ => _layoutGrouper.GroupLines(lineBlocks)
+        };
     }
 
     private static OcrEngine CreateEngine(string? languageTag)
@@ -311,6 +326,7 @@ public sealed class WindowsOcrService : IOcrService
             _words.Add(word);
         }
     }
+
 }
 
 internal static class EnglishOcrTextFilter

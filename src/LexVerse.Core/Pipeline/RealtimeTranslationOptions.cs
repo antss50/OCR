@@ -53,4 +53,14 @@ public sealed record RealtimeTranslationOptions(
         MaxParallelTranslationRequests = 3,
         MaxTranslationBatchSize = 16
     };
+
+    public static RealtimeTranslationOptions Comic { get; } = new(
+        OcrProcessingMode.Comic,
+        "auto",
+        "vi",
+        TimeSpan.FromMilliseconds(650))
+    {
+        MaxParallelTranslationRequests = 3,
+        MaxTranslationBatchSize = 10
+    };
 }

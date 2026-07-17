@@ -98,6 +98,9 @@ As of this update:
 - `codex/overlay-ocr-block-contrast` still exists locally at the merged overlay commit and has no upstream.
 - Latest local committed change is `4e0283e fix: bỏ qua ignored terms trong overlay realtime`; the branch is currently ahead of `origin/feature/pipeline-integration` by 3 commits.
 - Latest working tree changes add the Control Center settings panel with only app language and shortcut configuration; these are not committed yet as of this note.
+- Latest working tree changes also fix comic-style all-caps dialogue translation when acronym preservation is enabled; these are not committed yet as of this note.
+- Latest working tree changes also add Comic / manga OCR mode back with text-geometry speech-bubble line grouping; this is not committed yet as of this note.
+- The previous Comic OCR `11M` normalization and RAM optimization attempt remain reverted; they are not present in the current working tree.
 - `.gitignore` already ignores common build outputs, Visual Studio state, `.env`, local config, credentials, generated files, and artifacts.
 
 Before changing code in future prompts:
@@ -356,6 +359,44 @@ Use the smallest meaningful verification:
 - Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-settings` passed with 0 warnings and 0 errors.
 - Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore` passed: 24 passed, 0 failed, 0 skipped.
 
+### 2026-07-09 Comic Uppercase Dialogue Fix
+
+- Root cause for an English comic speech bubble such as `WHAT DO YOU THINK YOU'RE DOING?`: with `Keep acronyms / technical terms` enabled, automatic acronym preservation treated each all-caps dialogue word as a protected term; ignored-only suppression could then skip blocks, or the translator would receive only keep-tokens and restore the original English text.
+- Changed `TranslationTermProtector` so ignored-only suppression only considers explicit ignored terms, not automatic acronym matches.
+- Added an all-caps prose heuristic so automatic acronym preservation still protects mixed-case technical terms such as `OCR`, `HP`, and `EXP`, but does not tokenize comic-style all-caps dialogue before translation.
+- Added focused tests for the screenshot-style all-caps dialogue lines.
+- Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore` passed: 28 passed, 0 failed, 0 skipped.
+- Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-comic-uppercase` passed with 0 warnings and 0 errors.
+- Git caveat: `feature/pipeline-integration` was already up to date with origin before this change; the fix is currently uncommitted in the working tree.
+
+### 2026-07-09 Reverted Comic / Manga OCR Mode
+
+- At user request, widened the rollback to remove the initial Comic / manga OCR mode as well because the app still did not behave like the earlier version.
+- Removed `OcrProcessingMode.Comic`, `RealtimeTranslationOptions.Comic`, the comic grouping mode/grouper/test files, the WPF `Comic / manga` dropdown option, and the `WindowsOcrService` grouping-mode constructor path.
+- Kept the earlier all-caps dialogue/acronym-preservation fix only.
+- The previous Comic OCR `11M` normalization and RAM/crop optimization attempt remains reverted.
+- Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore` passed: 28 passed, 0 failed, 0 skipped.
+- Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-revert-comic-mode` passed with 0 warnings and 0 errors.
+
+### 2026-07-18 Comic / Manga OCR Mode Added Back
+
+- Added `OcrProcessingMode.Comic` and `RealtimeTranslationOptions.Comic` back for comic/manga reading.
+- Added `OcrTextBlockGroupingMode` plus `ComicSpeechBubbleGrouper` in Core. The comic grouper clusters OCR lines by text geometry: close vertical spacing, similar font size, and center/horizontal alignment, so stacked lines inside one speech bubble become one dialogue block.
+- Updated `WindowsOcrService` so the caller can choose `Layout` grouping or `ComicSpeechBubbles` grouping while keeping `Layout` as the default for existing modes.
+- Wired the WPF pipeline sample `OCR MODE` dropdown with `Comic / manga`; selecting it uses comic grouping only for that mode.
+- Added tests for centered stacked bubble lines, side-by-side bubbles, and vertically distant bubbles.
+- Caveat: this mode groups recognized text lines; it does not perform image-based detection of drawn balloon outlines yet.
+- Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore` passed: 31 passed, 0 failed, 0 skipped.
+- Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-comic-mode` passed with 0 warnings and 0 errors.
+
+### 2026-07-18 Reverted Comic Today/Gonna Experiments
+
+- At user request, reverted the experimental fixes attempted after Comic mode was added back because they made OCR/translation behavior worse.
+- Removed the Comic short-final-line/orphan-continuation grouper changes, OCR high-contrast/2x variant passes, `CONNA` -> `GONNA` normalizer, realtime source-language wiring, and acronym allowlist changes.
+- Current working tree keeps the earlier Comic / manga mode only: it adds the dropdown option, `OcrProcessingMode.Comic`, `RealtimeTranslationOptions.Comic`, `OcrTextBlockGroupingMode`, and the basic `ComicSpeechBubbleGrouper` text-geometry grouping.
+- Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore` passed: 31 passed, 0 failed, 0 skipped.
+- Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-comic-rollback` passed with 0 warnings and 0 errors.
+
 ## Next Recommended Work
 
 1. Manually run `samples/LexVerse.Pipeline.Sample`, pick a document app, and confirm translated OCR blocks render as black boxes with white text.
@@ -369,6 +410,9 @@ Use the smallest meaningful verification:
 9. Confirm the F6 popup no longer renders source/translation comparison highlights; it should show only the translation and clickable `Important terms`.
 10. Test ignored terms live with Popup/F6 and Region realtime, especially multi-word terms and game stats such as HP, MP, and EXP.
 11. Open the new Settings gear panel and verify that English/Tiếng Việt app language switching, duplicate shortcut warnings, and Popup global hotkey re-registration behave correctly.
-12. Replace the Wikipedia-first keyword explainer with a provider-backed AI annotation service if Bedrock/OpenAI-style popup understanding is added later; keep the current lookup path as a low-cost fallback.
-13. Add a prompt-aware AI translator provider that consumes `TranslationPromptOptions.Instruction`; Google Cloud Translation V2 currently ignores the runtime prompt text.
-14. Review the pushed `feature/pipeline-integration` branch on GitHub before opening or updating a PR.
+12. Live-test an all-caps comic speech bubble with `Keep acronyms / technical terms` enabled and confirm the text is translated instead of restored unchanged.
+13. Live-test `OCR MODE = Comic / manga` on selected comic bubbles and full pages; confirm one bubble becomes one translated overlay block while separate bubbles stay separate.
+14. Add image-based speech balloon segmentation later if text-geometry grouping is not enough for overlapping, irregular, or nested manga bubbles.
+15. Replace the Wikipedia-first keyword explainer with a provider-backed AI annotation service if Bedrock/OpenAI-style popup understanding is added later; keep the current lookup path as a low-cost fallback.
+16. Add a prompt-aware AI translator provider that consumes `TranslationPromptOptions.Instruction`; Google Cloud Translation V2 currently ignores the runtime prompt text.
+17. Review the pushed `feature/pipeline-integration` branch on GitHub before opening or updating a PR.

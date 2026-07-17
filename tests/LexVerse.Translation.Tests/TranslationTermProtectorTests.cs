@@ -47,6 +47,25 @@ public sealed class TranslationTermProtectorTests
     }
 
     [Theory]
+    [InlineData("WHAT DO I THINK I'M DOING?")]
+    [InlineData("WHAT DO YOU THINK YOU'RE DOING?")]
+    public async Task TranslateAsync_WithAllCapsDialogue_DoesNotProtectDialogueWords(string text)
+    {
+        var translator = new RecordingTranslator();
+        var options = new TranslationPromptOptions(
+            preserveAcronymsAndTechnicalTerms: true);
+
+        _ = await ((ITextTranslator)translator).TranslateAsync(
+            text,
+            "vi",
+            "en",
+            options,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(text, translator.RequestedText);
+    }
+
+    [Theory]
     [InlineData("HP")]
     [InlineData("MP 10/20")]
     [InlineData("EXP: 45")]
@@ -71,6 +90,18 @@ public sealed class TranslationTermProtectorTests
         Assert.False(TranslationTermProtector.ShouldIgnoreDetectedText("HP increased after battle.", options));
     }
 
+    [Theory]
+    [InlineData("WHAT DO I THINK I'M DOING?")]
+    [InlineData("WHAT DO YOU THINK YOU'RE DOING?")]
+    public void ShouldIgnoreDetectedText_WhenTextIsAllCapsDialogue_ReturnsFalse(string text)
+    {
+        var options = new TranslationPromptOptions(
+            ignoredTerms: ["HP", "MP", "EXP", "FPS"],
+            preserveAcronymsAndTechnicalTerms: true);
+
+        Assert.False(TranslationTermProtector.ShouldIgnoreDetectedText(text, options));
+    }
+
     private sealed class TokenEchoTranslator : ITextTranslator
     {
         public Task<TextTranslationResult> TranslateAsync(
@@ -81,6 +112,26 @@ public sealed class TranslationTermProtectorTests
         {
             Assert.DoesNotContain("HP", text);
             Assert.DoesNotContain("Byzantine emperor", text);
+
+            return Task.FromResult(new TextTranslationResult(
+                text,
+                $"translated {text}",
+                targetLanguage,
+                sourceLanguage));
+        }
+    }
+
+    private sealed class RecordingTranslator : ITextTranslator
+    {
+        public string? RequestedText { get; private set; }
+
+        public Task<TextTranslationResult> TranslateAsync(
+            string text,
+            string targetLanguage,
+            string? sourceLanguage = null,
+            CancellationToken cancellationToken = default)
+        {
+            RequestedText = text;
 
             return Task.FromResult(new TextTranslationResult(
                 text,

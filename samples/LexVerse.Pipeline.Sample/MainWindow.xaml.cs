@@ -9,6 +9,7 @@ using System.Windows.Interop;
 using LexVerse.Core.Capture;
 using LexVerse.Core.Geometry;
 using LexVerse.Core.Imaging;
+using LexVerse.Core.Ocr;
 using LexVerse.Core.Overlay;
 using LexVerse.Core.Pipeline;
 using LexVerse.Core.ScreenCapture;
@@ -1172,7 +1173,7 @@ public partial class MainWindow : Window
         var pipeline = new RealtimeTranslationPipeline(
             _captureSession,
             new ExactFrameChangeDetector(),
-            new WindowsOcrService(GetComboBoxTagOrText(OcrLanguageBox)),
+            new WindowsOcrService(GetComboBoxTagOrText(OcrLanguageBox), CreateOcrTextGroupingMode(options.Mode)),
             new GoogleCloudTextTranslator(),
             new InMemoryTranslationCache(),
             options,
@@ -1429,6 +1430,7 @@ public partial class MainWindow : Window
             "subtitle" => RealtimeTranslationOptions.Subtitle,
             "game-dialogue" => RealtimeTranslationOptions.GameDialogue,
             "document" => RealtimeTranslationOptions.Document,
+            "comic" => RealtimeTranslationOptions.Comic,
             _ => RealtimeTranslationOptions.FullScreen
         };
 
@@ -1554,6 +1556,13 @@ public partial class MainWindow : Window
     private static string TrimForStatus(string text)
     {
         return text.Length <= 46 ? text : string.Concat(text.AsSpan(0, 43), "...");
+    }
+
+    private static OcrTextBlockGroupingMode CreateOcrTextGroupingMode(OcrProcessingMode mode)
+    {
+        return mode == OcrProcessingMode.Comic
+            ? OcrTextBlockGroupingMode.ComicSpeechBubbles
+            : OcrTextBlockGroupingMode.Layout;
     }
 
     private sealed record SessionCaptureItem(

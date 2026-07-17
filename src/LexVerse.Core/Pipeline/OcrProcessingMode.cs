@@ -5,5 +5,6 @@ public enum OcrProcessingMode
     Subtitle,
     GameDialogue,
     Document,
-    FullScreen
+    FullScreen,
+    Comic
 }

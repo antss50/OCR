@@ -625,6 +625,7 @@
                                     <ComboBoxItem Content="Subtitle" Tag="subtitle"/>
                                     <ComboBoxItem Content="Game dialogue" Tag="game-dialogue"/>
                                     <ComboBoxItem Content="Document" Tag="document"/>
+                                    <ComboBoxItem Content="Comic / manga" Tag="comic"/>
                                 </ComboBox>
 
                                 <Border Height="1"

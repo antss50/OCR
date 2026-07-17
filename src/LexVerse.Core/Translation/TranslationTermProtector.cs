@@ -8,7 +8,9 @@ public static class TranslationTermProtector
     private static readonly Regex AcronymRegex = new(
         @"(?<![\p{L}\p{N}_])[A-Z][A-Z0-9]*(?:[/-][A-Z0-9]+)*(?![\p{L}\p{N}_])",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
+    private static readonly Regex UppercaseWordRegex = new(
+        @"(?<![\p{L}\p{N}_])[A-Z]+(?:['’][A-Z]+)?(?![\p{L}\p{N}_])",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
     public static ProtectedTranslationText Protect(
         string text,
         TranslationPromptOptions? options)
@@ -59,7 +61,7 @@ public static class TranslationTermProtector
             return false;
         }
 
-        var matches = SelectNonOverlappingMatches(FindMatches(text, options));
+        var matches = SelectNonOverlappingMatches(FindIgnoredTermMatches(text, options));
         if (matches.Count == 0)
         {
             return false;
@@ -83,14 +85,9 @@ public static class TranslationTermProtector
         string text,
         TranslationPromptOptions options)
     {
-        var candidates = new List<TermMatch>();
+        var candidates = new List<TermMatch>(FindIgnoredTermMatches(text, options));
 
-        foreach (var term in options.IgnoredTerms.OrderByDescending(term => term.Length))
-        {
-            AddIgnoredTermMatches(text, term, candidates);
-        }
-
-        if (options.PreserveAcronymsAndTechnicalTerms)
+        if (options.PreserveAcronymsAndTechnicalTerms && !LooksLikeAllCapsProse(text))
         {
             foreach (Match match in AcronymRegex.Matches(text))
             {
@@ -99,6 +96,24 @@ public static class TranslationTermProtector
                     candidates.Add(new TermMatch(match.Index, match.Length, 1));
                 }
             }
+        }
+
+        return candidates
+            .OrderBy(match => match.Start)
+            .ThenBy(match => match.Priority)
+            .ThenByDescending(match => match.Length)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<TermMatch> FindIgnoredTermMatches(
+        string text,
+        TranslationPromptOptions options)
+    {
+        var candidates = new List<TermMatch>();
+
+        foreach (var term in options.IgnoredTerms.OrderByDescending(term => term.Length))
+        {
+            AddIgnoredTermMatches(text, term, candidates);
         }
 
         return candidates
@@ -153,7 +168,53 @@ public static class TranslationTermProtector
 
     private static bool ShouldPreserveAcronym(string value)
     {
+        var letters = value.Where(char.IsLetter).ToArray();
+        if (letters.Length < 2)
+        {
+            return false;
+        }
+
         return value.Length >= 2 && value.Any(char.IsLetter);
+    }
+
+    private static bool LooksLikeAllCapsProse(string text)
+    {
+        var letters = 0;
+        var lowercaseLetters = 0;
+        foreach (var character in text)
+        {
+            if (!char.IsLetter(character))
+            {
+                continue;
+            }
+
+            letters++;
+            if (char.IsLower(character))
+            {
+                lowercaseLetters++;
+            }
+        }
+
+        if (letters < 6 || lowercaseLetters > 0)
+        {
+            return false;
+        }
+
+        var wordCount = 0;
+        var hasLongWord = false;
+        foreach (Match match in UppercaseWordRegex.Matches(text))
+        {
+            var letterCount = match.Value.Count(char.IsLetter);
+            if (letterCount == 0)
+            {
+                continue;
+            }
+
+            wordCount++;
+            hasLongWord |= letterCount >= 4;
+        }
+
+        return wordCount >= 2 && hasLongWord;
     }
 
     private static bool ContainsLetterOutsideIgnoredTerms(ReadOnlySpan<char> value)
