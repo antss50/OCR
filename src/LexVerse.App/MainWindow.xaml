@@ -1,0 +1,322 @@
+<Window x:Class="LexVerse.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="LexVerse Control Center"
+        Width="980"
+        Height="650"
+        MinWidth="860"
+        MinHeight="580"
+        WindowStartupLocation="CenterScreen"
+        AutomationProperties.Name="LexVerse Control Center"
+        Background="{StaticResource BackgroundBrush}">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="76"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="50"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Background="#101319">
+            <Grid Margin="34,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Border Width="40" Height="40" CornerRadius="10" Background="{StaticResource AccentBrush}">
+                    <TextBlock Text="LV"
+                               Foreground="#17130A"
+                               FontWeight="Bold"
+                               FontSize="15"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="LexVerse" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" FontSize="20"/>
+                    <TextBlock Text="Realtime language workspace" Foreground="{StaticResource MutedTextBrush}" FontSize="12"/>
+                </StackPanel>
+                <Border Grid.Column="2"
+                        Background="#14281F"
+                        BorderBrush="#245B42"
+                        BorderThickness="1"
+                        CornerRadius="14"
+                        Padding="12,6"
+                        VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="7" Height="7" Fill="#54D28B" Margin="0,0,7,0"/>
+                        <TextBlock x:Name="HotkeyStatusText" Text="F6 starting…" Foreground="#A8E7C3" FontSize="12"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="34,28,34,24">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="24"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="Popup translation"
+                           Foreground="{StaticResource TextBrush}"
+                           FontSize="28"
+                           FontWeight="SemiBold"/>
+                <TextBlock Text="Highlight text in any application and press F6. LexVerse translates it without leaving your current task."
+                           Foreground="{StaticResource MutedTextBrush}"
+                           TextWrapping="Wrap"
+                           LineHeight="21"
+                           Margin="0,8,0,22"/>
+
+                <Border Background="{StaticResource SurfaceBrush}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="14"
+                        Padding="22">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="FROM" Foreground="{StaticResource MutedTextBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,7"/>
+                                <ComboBox x:Name="SourceLanguageBox" SelectedIndex="0">
+                                    <ComboBoxItem Content="Auto detect" Tag="auto"/>
+                                    <ComboBoxItem Content="English" Tag="en"/>
+                                    <ComboBoxItem Content="Japanese" Tag="ja"/>
+                                    <ComboBoxItem Content="Korean" Tag="ko"/>
+                                    <ComboBoxItem Content="Chinese" Tag="zh"/>
+                                    <ComboBoxItem Content="Vietnamese" Tag="vi"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="TO" Foreground="{StaticResource MutedTextBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,7"/>
+                                <ComboBox x:Name="TargetLanguageBox" SelectedIndex="0">
+                                    <ComboBoxItem Content="Vietnamese" Tag="vi"/>
+                                    <ComboBoxItem Content="English" Tag="en"/>
+                                    <ComboBoxItem Content="Japanese" Tag="ja"/>
+                                    <ComboBoxItem Content="Korean" Tag="ko"/>
+                                    <ComboBoxItem Content="Chinese" Tag="zh"/>
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Text="QUICK TEXT"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Margin="0,20,0,7"/>
+                        <TextBox x:Name="QuickTextBox"
+                                 AutomationProperties.Name="Quick text to translate"
+                                 AutomationProperties.HelpText="Text is sent to the configured provider only when external processing is enabled."
+                                 MinHeight="100"
+                                 MaxHeight="160"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 ToolTip="Type or paste text to verify the translation provider"/>
+
+                        <Grid Margin="0,16,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="QuickTranslateButton"
+                                    Style="{StaticResource PrimaryButton}"
+                                    Content="_Translate quick text"
+                                    AutomationProperties.HelpText="Translate the text entered above."
+                                    Click="TranslateQuickText_Click"/>
+                            <Button Grid.Column="2"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Content="Minimize — use F6"
+                                    Click="MinimizeForHotkey_Click"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="0,0,5,0">
+                <TextBlock Text="Product modules" Foreground="{StaticResource TextBrush}" FontSize="17" FontWeight="SemiBold"/>
+                <TextBlock x:Name="ModuleCountText" Foreground="{StaticResource MutedTextBrush}" FontSize="12" Margin="0,4,0,14"/>
+
+                <Border Background="{StaticResource AccentDarkBrush}"
+                        BorderBrush="#6B5424"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Popup" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Selection + quick text" Foreground="{StaticResource MutedTextBrush}" FontSize="12" Margin="0,4,0,0"/>
+                        </StackPanel>
+                        <Border Grid.Column="1" Background="#2D623F" CornerRadius="10" Padding="8,4" VerticalAlignment="Top">
+                            <TextBlock x:Name="PopupStatusText" Text="CONSENT" Foreground="#B8F2CF" FontSize="10" FontWeight="Bold"/>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <Border Background="{StaticResource SurfaceBrush}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="16"
+                        Margin="0,10,0,0">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Document translation" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="RealtimeStatusText" Grid.Column="1" Text="READY" Foreground="#A8E7C3" FontSize="10" FontWeight="Bold"/>
+                        </Grid>
+                        <TextBlock Text="Select an area of a document and keep its translated overlay updated."
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   TextWrapping="Wrap"
+                                   FontSize="12"
+                                   Margin="0,5,0,0"/>
+                        <ComboBox x:Name="ModeBox" SelectedIndex="0" Visibility="Collapsed">
+                            <ComboBoxItem Content="Document" Tag="document"/>
+                        </ComboBox>
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="0"/>
+                                <ColumnDefinition Width="0"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="RegionButton"
+                                    Style="{StaticResource PrimaryButton}"
+                                    Content="Select document region"
+                                    AutomationProperties.HelpText="Select a document area for translation. External processing consent is required."
+                                    Padding="10,8"
+                                    Click="StartRegionRealtime_Click"/>
+                            <Button x:Name="FullScreenButton"
+                                    Grid.Column="2"
+                                    Visibility="Collapsed"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Content="Full screen"
+                                    AutomationProperties.HelpText="Translate the nearest monitor. Requires paid access and external processing consent."
+                                    Padding="10,8"
+                                    Click="StartFullScreenRealtime_Click"/>
+                        </Grid>
+                        <Button x:Name="StopRealtimeButton"
+                                Style="{StaticResource SecondaryButton}"
+                                Content="Stop document translation"
+                                Padding="10,8"
+                                Margin="0,8,0,0"
+                                IsEnabled="False"
+                                Click="StopRealtime_Click"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="{StaticResource SurfaceBrush}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="16"
+                        Margin="0,10,0,0">
+                    <StackPanel>
+                        <StackPanel x:Name="CommercePanel" Visibility="Collapsed">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Account &amp; plan" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="AccountStatusText" Grid.Column="1" Text="LOADING" Foreground="{StaticResource AccentBrush}" FontSize="10" FontWeight="Bold"/>
+                        </Grid>
+                        <TextBlock x:Name="AccountDetailText"
+                                   Text="Checking account configuration..."
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   TextWrapping="Wrap"
+                                   FontSize="12"
+                                   Margin="0,5,0,0"/>
+                        <ComboBox x:Name="OfferBox" Margin="0,10,0,0"
+                                  AutomationProperties.Name="Available plans"
+                                  SelectionChanged="OfferBox_SelectionChanged"/>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="SignInButton" Style="{StaticResource SecondaryButton}" Content="_Sign in" Padding="9,7" Click="SignIn_Click"/>
+                            <Button x:Name="BuyButton" Grid.Column="2" Style="{StaticResource PrimaryButton}" Content="_Choose plan" Padding="9,7" Click="Buy_Click"/>
+                        </Grid>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="RestoreButton" Style="{StaticResource SecondaryButton}" Content="_Restore / refresh" Padding="9,7" Click="Restore_Click"/>
+                            <Button x:Name="SignOutButton" Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="Sign _out" Padding="9,7" Click="SignOut_Click"/>
+                        </Grid>
+                        <TextBlock Text="Checkout opens securely in your browser. Prices are confirmed by the store."
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   TextWrapping="Wrap"
+                                   FontSize="10"
+                                   Margin="0,8,0,0"/>
+                        </StackPanel>
+                        <TextBlock Text="PRIVACY &amp; DATA" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"/>
+                        <TextBlock Text="Control when LexVerse may send text to your translation provider."
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   TextWrapping="Wrap"
+                                   FontSize="12"
+                                   Margin="0,5,0,10"/>
+                        <CheckBox x:Name="RemoteProcessingCheckBox"
+                                  Content="Allow external text processing"
+                                  Foreground="{StaticResource TextBrush}"
+                                  AutomationProperties.HelpText="Allows selected, typed, or OCR text to be sent to the configured translation provider."
+                                  Checked="PrivacySetting_Changed"
+                                  Unchecked="PrivacySetting_Changed"/>
+                        <CheckBox x:Name="LocalDiagnosticsCheckBox"
+                                  Content="Keep local performance diagnostics"
+                                  Foreground="{StaticResource TextBrush}"
+                                  Margin="0,6,0,0"
+                                  AutomationProperties.HelpText="Stores bounded content-free operational metrics on this device."
+                                  Checked="PrivacySetting_Changed"
+                                  Unchecked="PrivacySetting_Changed"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <Border Grid.Row="2"
+                Background="#101319"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0">
+            <Grid Margin="34,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="STATUS" Foreground="{StaticResource AccentBrush}" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                <TextBlock x:Name="StatusText"
+                           Grid.Column="1"
+                           Text="Starting application modules…"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           Margin="12,0,0,0"
+                           TextTrimming="CharacterEllipsis"
+                           AutomationProperties.LiveSetting="Polite"
+                           AutomationProperties.Name="Application status"
+                           VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -8,7 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\LexVerse.Application\LexVerse.Application.csproj" />
     <ProjectReference Include="..\LexVerse.Core\LexVerse.Core.csproj" />
+    <ProjectReference Include="..\LexVerse.OCR\LexVerse.OCR.csproj" />
   </ItemGroup>
 
   <ItemGroup>

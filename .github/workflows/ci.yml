@@ -1,0 +1,116 @@
+name: LexVerse CI
+
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  NUGET_XMLDOC_MODE: skip
+
+jobs:
+  build-test:
+    name: Build and test
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore LexVerse.slnx
+
+      - name: Build with warnings as errors
+        run: dotnet build LexVerse.slnx --configuration Release --no-restore --warnaserror
+
+      - name: Enforce startup and idle-memory budgets
+        shell: pwsh
+        run: .\scripts\test-startup-budget.ps1 -Configuration Release
+
+      - name: Run tests
+        run: dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=lexverse-tests.trx"
+
+      - name: Audit vulnerable dependencies
+        run: dotnet list LexVerse.slnx package --vulnerable --include-transitive
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ github.run_id }}
+          path: "**/TestResults/*.trx"
+          if-no-files-found: ignore
+          retention-days: 7
+
+  package-smoke:
+    name: Unsigned MSIX smoke
+    needs: build-test
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Verify release safety guards
+        shell: pwsh
+        run: |
+          $insecureUri = Start-Process powershell.exe -Wait -PassThru -NoNewWindow -ArgumentList @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', '.\scripts\package-msix.ps1',
+            '-Version', '1.0.0.0', '-Channel', 'beta',
+            '-ReleaseBaseUri', 'http://downloads.invalid/lexverse', '-Unsigned'
+          )
+          if ($insecureUri.ExitCode -eq 0) { throw 'The HTTPS release guard did not reject an insecure URI.' }
+
+          $missingSignature = Start-Process powershell.exe -Wait -PassThru -NoNewWindow -ArgumentList @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', '.\scripts\package-msix.ps1',
+            '-Version', '1.0.0.0', '-Channel', 'stable',
+            '-ReleaseBaseUri', 'https://downloads.invalid/lexverse'
+          )
+          if ($missingSignature.ExitCode -eq 0) { throw 'The signing guard did not reject an unsigned production package.' }
+
+      - name: Build unsigned package fixture
+        shell: pwsh
+        run: |
+          & .\scripts\package-msix.ps1 `
+            -Version 1.0.0.0 `
+            -AppInstallerVersion 1.0.1.0 `
+            -Channel beta `
+            -ReleaseBaseUri https://downloads.invalid/lexverse `
+            -Unsigned
+
+      - name: Verify package outputs
+        shell: pwsh
+        run: |
+          $release = 'artifacts/release/beta/1.0.0.0/win-x64'
+          $package = Get-Item "$release/LexVerse-beta-1.0.0.0-x64.msix"
+          $checksum = ((Get-Content "$($package.FullName).sha256" -Raw).Split(' ')[0]).Trim()
+          $actual = (Get-FileHash -Algorithm SHA256 $package.FullName).Hash.ToLowerInvariant()
+          if ($checksum -ne $actual) { throw 'Generated MSIX checksum does not match.' }
+
+          [xml]$appInstaller = Get-Content "$release/LexVerse-beta.appinstaller" -Raw
+          if ($appInstaller.AppInstaller.Version -ne '1.0.1.0') { throw 'Independent App Installer version was not generated.' }
+          if (Test-Path "$release/staging") { throw 'Packaging staging files were not cleaned.' }

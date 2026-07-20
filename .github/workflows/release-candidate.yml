@@ -1,0 +1,253 @@
+name: LexVerse signed release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: MSIX quad version, for example 1.2.0.0
+        required: true
+        type: string
+      appinstaller_version:
+        description: Monotonic channel-manifest quad version
+        required: true
+        type: string
+      channel:
+        description: Independent package/update identity
+        required: true
+        default: beta
+        type: choice
+        options:
+          - beta
+          - stable
+      release_base_uri:
+        description: HTTPS root that will host the stable and beta folders
+        required: true
+        type: string
+      publisher:
+        description: Exact X.500 subject of the code-signing certificate
+        required: true
+        type: string
+      publisher_display_name:
+        description: Customer-visible verified publisher name
+        required: true
+        default: LexVerse
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signed-release-${{ inputs.channel }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  NUGET_XMLDOC_MODE: skip
+
+jobs:
+  validate:
+    name: Validate release source
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Require source commit on main
+        shell: pwsh
+        run: |
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'Signed candidates must be built from a commit reachable from main.' }
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore LexVerse.slnx
+
+      - name: Build with warnings as errors
+        run: dotnet build LexVerse.slnx --configuration Release --no-restore --warnaserror
+
+      - name: Run tests
+        run: dotnet test LexVerse.slnx --configuration Release --no-build --no-restore
+
+      - name: Enforce startup and idle-memory budgets
+        shell: pwsh
+        run: .\scripts\test-startup-budget.ps1 -Configuration Release
+
+      - name: Audit vulnerable dependencies
+        run: dotnet list LexVerse.slnx package --vulnerable --include-transitive
+
+  sign:
+    name: Sign and attest ${{ inputs.channel }} ${{ inputs.version }}
+    needs: validate
+    runs-on: windows-latest
+    timeout-minutes: 25
+    environment:
+      name: ${{ inputs.channel == 'stable' && 'lexverse-stable' || 'lexverse-beta' }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@v6
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Import ephemeral signing certificate
+        id: signing
+        shell: pwsh
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_PFX_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:SIGNING_PFX_PASSWORD)) {
+            throw 'The protected release environment is missing signing secrets.'
+          }
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'lexverse-signing.pfx'
+          $bytes = [Convert]::FromBase64String($env:SIGNING_PFX_BASE64)
+          try { [IO.File]::WriteAllBytes($pfxPath, $bytes) }
+          finally { [Array]::Clear($bytes, 0, $bytes.Length) }
+          $password = ConvertTo-SecureString $env:SIGNING_PFX_PASSWORD -AsPlainText -Force
+          $existingThumbprints = @(Get-ChildItem Cert:\CurrentUser\My | ForEach-Object Thumbprint)
+          try {
+            $imported = @(Import-PfxCertificate `
+                -FilePath $pfxPath `
+                -CertStoreLocation Cert:\CurrentUser\My `
+                -Password $password `
+                -Exportable:$false)
+            $certificate = $imported | Where-Object HasPrivateKey | Select-Object -First 1
+            if ($null -eq $certificate -or -not $certificate.HasPrivateKey) {
+              throw 'The imported signing certificate has no private key.'
+            }
+            "thumbprint=$($certificate.Thumbprint)" >> $env:GITHUB_OUTPUT
+            "imported_thumbprints=$(($imported.Thumbprint | Sort-Object -Unique) -join ',')" >> $env:GITHUB_OUTPUT
+          }
+          catch {
+            Get-ChildItem Cert:\CurrentUser\My |
+              Where-Object { $_.Thumbprint -notin $existingThumbprints } |
+              Remove-Item -Force
+            Remove-Item -LiteralPath $pfxPath -Force -ErrorAction SilentlyContinue
+            throw
+          }
+
+      - name: Build signed MSIX candidate
+        id: package
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          APPINSTALLER_VERSION: ${{ inputs.appinstaller_version }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+          RELEASE_BASE_URI: ${{ inputs.release_base_uri }}
+          RELEASE_PUBLISHER: ${{ inputs.publisher }}
+          RELEASE_PUBLISHER_NAME: ${{ inputs.publisher_display_name }}
+          SIGNING_THUMBPRINT: ${{ steps.signing.outputs.thumbprint }}
+        run: |
+          & .\scripts\package-msix.ps1 `
+            -Version $env:RELEASE_VERSION `
+            -AppInstallerVersion $env:APPINSTALLER_VERSION `
+            -Channel $env:RELEASE_CHANNEL `
+            -ReleaseBaseUri $env:RELEASE_BASE_URI `
+            -Publisher $env:RELEASE_PUBLISHER `
+            -PublisherDisplayName $env:RELEASE_PUBLISHER_NAME `
+            -CertificateThumbprint $env:SIGNING_THUMBPRINT
+
+      - name: Validate signature, timestamp, hash and update pointer
+        id: paths
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          APPINSTALLER_VERSION: ${{ inputs.appinstaller_version }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+          RELEASE_BASE_URI: ${{ inputs.release_base_uri }}
+          RELEASE_PUBLISHER: ${{ inputs.publisher }}
+        run: |
+          $release = "artifacts/release/$env:RELEASE_CHANNEL/$env:RELEASE_VERSION/win-x64"
+          & .\scripts\test-signed-release-candidate.ps1 `
+            -ReleaseDirectory $release `
+            -Channel $env:RELEASE_CHANNEL `
+            -Version $env:RELEASE_VERSION `
+            -AppInstallerVersion $env:APPINSTALLER_VERSION `
+            -ReleaseBaseUri $env:RELEASE_BASE_URI `
+            -Publisher $env:RELEASE_PUBLISHER
+          $package = (Resolve-Path "$release/LexVerse-$env:RELEASE_CHANNEL-$env:RELEASE_VERSION-x64.msix").Path
+          $releasePath = (Resolve-Path $release).Path
+          "package=$package" >> $env:GITHUB_OUTPUT
+          "release=$releasePath" >> $env:GITHUB_OUTPUT
+
+      - name: Write immutable candidate metadata
+        shell: pwsh
+        env:
+          RELEASE_DIR: ${{ steps.paths.outputs.release }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          APPINSTALLER_VERSION: ${{ inputs.appinstaller_version }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: |
+          $package = Get-Item "$env:RELEASE_DIR/LexVerse-$env:RELEASE_CHANNEL-$env:RELEASE_VERSION-x64.msix"
+          $metadata = [ordered]@{
+            schemaVersion = 1
+            repository = $env:GITHUB_REPOSITORY
+            commit = $env:GITHUB_SHA
+            workflowRunId = $env:GITHUB_RUN_ID
+            workflowRunAttempt = $env:GITHUB_RUN_ATTEMPT
+            channel = $env:RELEASE_CHANNEL
+            version = $env:RELEASE_VERSION
+            appInstallerVersion = $env:APPINSTALLER_VERSION
+            packageFile = $package.Name
+            sha256 = (Get-FileHash -Algorithm SHA256 $package.FullName).Hash.ToLowerInvariant()
+            createdAtUtc = [DateTime]::UtcNow.ToString('o')
+          }
+          $metadata | ConvertTo-Json | Set-Content `
+            -LiteralPath "$env:RELEASE_DIR/release-candidate.json" `
+            -Encoding utf8NoBOM
+
+      - name: Attest signed package provenance
+        id: attest
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ steps.paths.outputs.package }}
+
+      - name: Copy offline attestation bundle
+        shell: pwsh
+        env:
+          RELEASE_DIR: ${{ steps.paths.outputs.release }}
+          ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: Copy-Item -LiteralPath $env:ATTESTATION_BUNDLE -Destination "$env:RELEASE_DIR/provenance.sigstore.json"
+
+      - name: Upload immutable candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: lexverse-${{ inputs.channel }}-${{ inputs.version }}-${{ github.sha }}
+          path: ${{ steps.paths.outputs.release }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove signing material
+        if: always()
+        shell: pwsh
+        env:
+          IMPORTED_THUMBPRINTS: ${{ steps.signing.outputs.imported_thumbprints }}
+        run: |
+          foreach ($thumbprint in $env:IMPORTED_THUMBPRINTS.Split(',', [StringSplitOptions]::RemoveEmptyEntries)) {
+            $certificatePath = "Cert:\CurrentUser\My\$thumbprint"
+            if (Test-Path -LiteralPath $certificatePath) {
+              Remove-Item -LiteralPath $certificatePath -Force
+            }
+          }
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'lexverse-signing.pfx'
+          if (Test-Path -LiteralPath $pfxPath) {
+            Remove-Item -LiteralPath $pfxPath -Force
+          }

@@ -37,7 +37,9 @@ Solution file: `LexVerse.slnx`.
 
 Important modules:
 
+- `src/LexVerse.App`: production WPF shell and explicit composition root; Popup is the first registered end-to-end feature module.
 - `src/LexVerse.Core`: shared contracts, geometry, OCR models, translation models/cache, pipeline logic.
+- `src/LexVerse.Application`: feature-module registration, entitlement refresh/cache, and gated use-case execution.
 - `src/LexVerse.Infrastructure`: Windows capture, Win32 window tracking, config, Google Cloud translation provider.
 - `src/LexVerse.OCR`: Windows OCR service and OCR debug result.
 - `src/LexVerse.Overlay`: WPF overlay rendering model/window.
@@ -96,10 +98,10 @@ As of this update:
 - `feature/pipeline-integration` tracks `origin/feature/pipeline-integration` and was pushed to GitHub after the UI/new feature merge.
 - `feature/ui-new-features` still exists locally at `dc02f3b` and has no upstream.
 - `codex/overlay-ocr-block-contrast` still exists locally at the merged overlay commit and has no upstream.
-- Latest local committed change is `4e0283e fix: bỏ qua ignored terms trong overlay realtime`; the branch is currently ahead of `origin/feature/pipeline-integration` by 3 commits.
-- Latest working tree changes add the Control Center settings panel with only app language and shortcut configuration; these are not committed yet as of this note.
-- Latest working tree changes also fix comic-style all-caps dialogue translation when acronym preservation is enabled; these are not committed yet as of this note.
-- Latest working tree changes also add Comic / manga OCR mode back with text-geometry speech-bubble line grouping; this is not committed yet as of this note.
+- The current branch baseline includes the Control Center settings panel, language/shortcut configuration, ignored-term handling, comic all-caps translation fix, and text-geometry comic OCR grouping.
+- The production MVP adds the production WPF shell, Popup/F6, Document-region translation, privacy consent, local diagnostics, modular feature access, packaging/update automation, and release gates.
+- Popup, Region, and Document mode are the free MVP feature matrix. Account, payment, Full screen, and specialized modes are dormant post-MVP extension points.
+- `.codegraph/` is a local untracked index and must remain outside product commits.
 - The previous Comic OCR `11M` normalization and RAM optimization attempt remain reverted; they are not present in the current working tree.
 - `.gitignore` already ignores common build outputs, Visual Studio state, `.env`, local config, credentials, generated files, and artifacts.
 
@@ -396,6 +398,176 @@ Use the smallest meaningful verification:
 - Current working tree keeps the earlier Comic / manga mode only: it adds the dropdown option, `OcrProcessingMode.Comic`, `RealtimeTranslationOptions.Comic`, `OcrTextBlockGroupingMode`, and the basic `ComicSpeechBubbleGrouper` text-geometry grouping.
 - Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore` passed: 31 passed, 0 failed, 0 skipped.
 - Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore -o %TEMP%\lexverse-pipeline-sample-build-comic-rollback` passed with 0 warnings and 0 errors.
+
+### 2026-07-20 Production Architecture And Product Entitlements
+
+- Audited the repository against the production goal. The runnable product behavior is still concentrated in `samples/LexVerse.Pipeline.Sample`, while `src/LexVerse.App` remains a console placeholder. No existing licensing/entitlement, installer/updater, CI release, telemetry, or global production error-handling mechanism was found.
+- Added `docs/PRODUCTION_ARCHITECTURE.md` with target boundaries, commercial/security rules, delivery milestones, and initial production gates.
+- Added the first product-domain foundation in `src/LexVerse.Core/Product`: stable feature keys, known LexVerse capability keys, versioned plan metadata, immutable time-bound entitlement snapshots, explicit access decisions, and an entitlement-provider contract.
+- Kept price, billing interval, checkout, renewal, and entitlement issuance outside the desktop authority. These values should come from a remote store/backend catalog so they can change without rebuilding the client; backend operations must re-authorize paid use cases.
+- Added focused tests covering feature-key normalization, invalid keys, active/permanent/future/expired/missing grants, duplicate plan IDs, case-insensitive plan lookup, and feature deduplication.
+- Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore` passed: 40 passed, 0 failed, 0 skipped.
+- Verification: filtered product tests passed: 9 passed, 0 failed, 0 skipped.
+- Verification: `dotnet build LexVerse.slnx --no-restore` passed with 0 warnings and 0 errors.
+- Git caveat: production foundation changes are uncommitted. `.codegraph/` remains an unrelated untracked index directory and was not modified as product code.
+- Next recommended production work: create the WPF composition root in `src/LexVerse.App`, extract application use cases from `Pipeline.Sample`, and require feature-access decisions at each paid capability boundary before wiring a real entitlement adapter.
+
+### 2026-07-20 Application Boundary, Module Registry, And Remote Offers
+
+- Added `src/LexVerse.Application` as a platform-neutral application layer and included it in `LexVerse.slnx`.
+- Added `FeatureAccessService`, which shares a short-lived verified entitlement snapshot across modules, serializes refreshes, uses an atomic immutable cache state for concurrent callers, throttles provider failures, and fails closed with `EntitlementsUnavailable`. Caller cancellation preserves the previous cache state.
+- Added `FeatureGate` and `FeatureAccessDeniedException`; paid use cases can now enforce authorization at execution time instead of relying on hidden/disabled buttons.
+- Added `FeatureModuleDescriptor`, `IFeatureModule`, and `FeatureModuleRegistry`. The registry fails during startup when module IDs collide or more than one module claims the same feature key, enabling deterministic add/remove/replace behavior in the future composition root.
+- Extended the versioned product catalog with remote `ProductOffer` entries, currency-safe `Money`, billing/trial `SubscriptionPeriod`, and `IProductCatalogProvider`. Plans remain stable feature groupings while offer price, currency, billing interval, and trial duration can change remotely without a desktop release.
+- Preserved the commercial security boundary: catalog prices are display metadata; checkout must resolve the offer ID with the authoritative store/backend, which issues verified entitlements.
+- Added tests for entitlement caching/refresh/failure retry, forced-refresh errors, gated execution, duplicate module registration/ownership, remote offers, billing/trial periods, and invalid plan references.
+- Verification: focused product/application/module tests passed: 21 passed, 0 failed, 0 skipped.
+- Verification: full `LexVerse.Translation.Tests` suite passed: 52 passed, 0 failed, 0 skipped.
+- Verification: `dotnet build LexVerse.slnx --no-restore` passed with 0 warnings and 0 errors.
+- Git caveat: all production architecture work remains uncommitted on `feature/pipeline-integration`; `.codegraph/` remains an unrelated untracked index directory.
+- Next recommended production work: convert `src/LexVerse.App` to WPF, create its composition root, register feature modules there, then extract Popup as the first end-to-end gated use case from `Pipeline.Sample`.
+
+### 2026-07-20 Production WPF Shell And Gated Popup Module
+
+- Converted `src/LexVerse.App` from a console placeholder to a WPF `WinExe` with explicit startup in `App.xaml.cs`; the shell is created only by `AppCompositionRoot` rather than by `StartupUri` or UI-side provider construction.
+- Added a polished production Control Center shell with native window controls, clear Popup/F6 guidance, source/target language selection, quick-text fallback, module status, provider privacy guidance, and a persistent status region.
+- Added `PopupTranslationUseCase` to `LexVerse.Application`. Both selected-text and quick-text paths authorize `translation.popup` through `FeatureGate` before reading clipboard content or calling a provider.
+- Added `WindowsSelectedTextReader` to Infrastructure. It sends Ctrl+C with `SendInput`, polls the clipboard sequence with a bounded timeout instead of a fixed wait, supports cancellation, and restores prior text clipboard content on a best-effort basis.
+- Added `DeferredTextTranslator`, so Google credentials/provider initialization happen on first request. Missing credentials no longer prevent the WPF shell from starting and presenting recovery guidance.
+- Added `PopupFeatureModule` and registered it in `FeatureModuleRegistry`. The current composition root grants Popup via a clearly named bundled-free entitlement; this is an explicit bootstrap product decision and must be replaced by verified remote/signed-offline entitlements before paid launches.
+- Added a topmost translation popup with loading, result, user-safe error, drag, close, screen-bound placement, and copy-result behavior.
+- Added global F6 registration in the thin WPF shell. Starting a new Popup operation cancels the previous operation and app shutdown releases the hotkey and cancellation resources.
+- Added `LocalExceptionLog` and startup/dispatcher/task/app-domain exception handling. Fatal startup/UI errors are recorded as local JSONL under `%LOCALAPPDATA%\LexVerse\Logs` and shown as user-safe messages.
+- Qualified WPF `System.Windows.Application` in the existing sample/overlay app classes after the new `LexVerse.Application` namespace exposed a compile-time name collision; sample behavior is unchanged.
+- Added five focused tests proving the Popup gate runs before clipboard/provider access, no-selection avoids provider calls, explicit quick text uses the same gate, language tags normalize, and deferred provider initialization occurs once.
+- Verification: focused Popup tests passed: 5 passed, 0 failed, 0 skipped.
+- Verification: full test suite passed: 57 passed, 0 failed, 0 skipped.
+- Verification: `dotnet build LexVerse.slnx --no-restore` passed with 0 warnings and 0 errors after namespace qualification.
+- Verification: hidden startup smoke kept `LexVerse.App` alive for 3 seconds without credentials, then stopped the test process.
+- Visual verification: captured the foreground app window at 980x650; layout rendered without clipping or overlap, language controls remained readable, and F6/module/status states were visible. The temporary screenshot was written to `C:\tmp\lexverse-app-visual.png`, outside the repository.
+- Caveat: live F6 clipboard behavior against another Windows app and a successful Google translation with real credentials still require manual end-to-end testing.
+- Git caveat: the production architecture and WPF changes remain uncommitted on `feature/pipeline-integration`; `.codegraph/` remains an unrelated untracked index directory.
+- Next recommended production work: extract Region/Full screen realtime orchestration into a cancellable application service and register it as the second production module; keep overlay rendering and monitor capture behind existing Core/Infrastructure contracts.
+
+### 2026-07-20 Production Region And Full-Screen Realtime Module
+
+- Extracted Region and Full screen orchestration from `samples/LexVerse.Pipeline.Sample` into platform-neutral `LexVerse.Application.Realtime` contracts and `RealtimeTranslationCoordinator`.
+- The coordinator authorizes the requested feature before creating capture resources, owns start/restart/stop and OCR cadence, publishes explicit state/frame events, supports cancellation, and deterministically disposes its active session/output after failures or shutdown.
+- Added `WindowsRealtimePipelineSessionFactory` in Infrastructure. It selects the correct monitor, creates Windows Graphics Capture and OCR resources, chooses Comic speech-bubble grouping when requested, and adapts `RealtimeTranslationPipeline` results into application-level frame updates.
+- Added `WindowsMonitorService` and the Core `ScreenRectOcrRegionProvider`; selected physical screen rectangles are clipped to the captured monitor and mapped into frame-local OCR pixels without WPF dependencies.
+- Added the registered `RealtimeFeatureModule`, production Region selector, and `WpfRealtimeOverlayOutput`. Overlay items are reconciled in place to reduce flicker, and the Control Center exposes Document, Comic/manga, Subtitle, and Game dialogue profiles.
+- Region and Full screen now have separate entitlement checks (`translation.region` and `translation.full-screen`). The bootstrap composition root grants both alongside Popup only to keep the current offline vertical slice usable; paid release builds still require verified remote plus signed-offline entitlements.
+- Main Control Center, Popup, and translation overlay windows opt out of Windows display capture, preventing LexVerse from OCRing its own UI. Closing the app asynchronously stops realtime work before releasing the composition root.
+- Added five tests covering gated session creation, frame processing and cleanup, restart disposal, fault state/release, and physical-region-to-frame mapping.
+- Hidden startup smoke confirmed the app remains alive without Google credentials; provider initialization is still deferred until translation is requested.
+- Visual verification at 980x650 confirmed the realtime module, processing selector, Region/Full screen/Stop controls, module states, and status area render without overlap. The temporary QA image is `C:\tmp\lexverse-realtime-module-visual.png`, outside the repository.
+- Caveat: a real credentialed Windows capture -> OCR -> Google translation -> overlay pass still requires manual end-to-end validation, including multi-monitor DPI alignment and installed OCR language packs.
+- Git caveat: the production work remains uncommitted on `feature/pipeline-integration`; `.codegraph/` remains an unrelated untracked index directory.
+- Next recommended production milestone: signed packaging and update channels, followed by verified remote/signed-offline entitlement adapters and automated release gates.
+
+### 2026-07-20 MSIX Distribution And CI Quality Gates
+
+- Chose self-contained MSIX plus Windows App Installer for customer distribution. The package does not require a preinstalled .NET runtime; Windows owns clean install/uninstall, package integrity, on-launch/background updates, and repair.
+- Added `scripts/package-msix.ps1` with explicit Stable/Beta identities, four-part version validation, HTTPS enforcement, generated package assets/manifest, ReadyToRun publishing, Windows SDK tool discovery, MakeAppx packaging, SHA-256 checksum generation, and deterministic staging cleanup.
+- Production packaging fails closed unless a certificate-store thumbprint is supplied. Signing uses SHA-256 plus an RFC 3161 timestamp and is verified after signing; `-Unsigned` is an explicit local/CI-only escape hatch.
+- Added independent `AppInstallerVersion`. Operators can monotonically advance the channel manifest while pointing it at an older signed package, enabling controlled rollback through `ForceUpdateFromAnyVersion`.
+- Added `packaging/README.md` with build, atomic publication, rollback, signing, retention, and clean-VM release requirements. The versioned MSIX/checksum must be uploaded and verified before replacing the channel `.appinstaller` pointer.
+- Added `.github/workflows/ci.yml` for Windows build/test/package gates: least-privilege repository access, concurrent-run cancellation, .NET 10 setup, restore, warnings-as-errors build, test results on failure, transitive vulnerability audit, packaging guard tests, and an unsigned MSIX smoke artifact.
+- Added `global.json` pinned to .NET SDK 10.0.301 with patch-only roll-forward, so developer and CI builds use the same feature band. Added weekly Dependabot monitoring for NuGet and GitHub Actions; NuGet minor/patch changes are grouped while majors remain individually reviewable.
+- Local packaging smoke succeeded through self-contained publish and MakeAppx validation: 431 payload files, 78.81 MiB MSIX, matching SHA-256, well-formed App Installer XML, and no retained staging directory.
+- Safety smoke confirmed insecure HTTP hosting and missing production signing configuration are both rejected before release output is created.
+- NuGet audit reported no known vulnerable direct or transitive packages across all solution projects using the current advisory sources.
+- Verification: full Debug and Release tests passed 62/62; Release `dotnet build LexVerse.slnx --configuration Release --no-restore --warnaserror` passed with 0 warnings and 0 errors; the final capture-protected app passed a hidden 3-second startup smoke without credentials.
+- Caveat: the smoke MSIX is unsigned and intentionally not installable as a public build. A trusted signing identity, real HTTPS download host/MIME configuration, clean-VM install/update/rollback/repair tests, and production release promotion remain external release prerequisites.
+- Next recommended production work: add privacy-aware operational telemetry and performance budgets, then complete a signed Beta release rehearsal on clean Windows VMs.
+
+### 2026-07-20 Privacy-Safe Telemetry And Performance Budgets
+
+- Added a platform-neutral, strongly typed `OperationalEvent`/`IOperationalTelemetry` boundary in Application. The schema has no arbitrary string, dictionary, or object payload and therefore cannot carry OCR text, translations, clipboard content, prompts, pixels, coordinates, window titles, or user/device identifiers.
+- Instrumented process startup/shutdown, Popup selected/quick translation outcomes, realtime session lifecycle, sampled frames, capture/OCR/translation/total latency, cache counts, block counts, memory, and budget violations. Telemetry failures are fail-open and cannot break translation or entitlement enforcement.
+- Added `LocalOperationalTelemetry`: a bounded drop-oldest channel, background batching, independent five-second flush deadline, deterministic shutdown flush, 1 MiB file limit, and three rotated files. Realtime records the first frame, every twentieth frame, and every over-budget frame; the closing session event keeps total frames and total violations.
+- Hardened `LocalExceptionLog`: raw exception messages and stack traces are no longer persisted. Local crash entries retain source, exception/inner type, HRESULT, timestamp, and a SHA-256 fingerprint for grouping without exposing provider request context or local paths.
+- Added mode-specific warning budgets for capture, OCR, translation, and total frame time. Over-budget frames continue translating, appear as `slower than target` in Control Center, and are captured as privacy-safe metrics.
+- Added `scripts/test-startup-budget.ps1` and wired it into CI. It requires the exact responsive `LexVerse Control Center` window within a 5,000 ms hard budget, reports a 3,000 ms target, enforces an initial 250 MiB working-set limit, and closes the app gracefully with a bounded fallback.
+- The startup gate exposed a real WPF shutdown bug: when realtime cleanup completed synchronously, the re-entrant second `Close()` was ignored indefinitely. The final close is now posted through the Dispatcher, and startup smoke verifies graceful process exit plus telemetry flush.
+- Realtime stop now completes deterministic cleanup once begun even if the caller cancellation token changes. Session/output cleanup failures are contained, surfaced as `cleanup-failed`, and recorded without leaking exception text.
+- Added `docs/TELEMETRY_PRIVACY.md` documenting permitted/forbidden data, storage/retention, sampling, budgets, and the consent/TLS/schema/rate-limit gates required before any future remote adapter.
+- Added tests for schema privacy, background deadline flush, bounded rotation, crash redaction, budget evaluation, Popup outcomes/fail-open behavior, realtime session correlation, sampling/session totals, and cleanup failure handling.
+- Verification: Release build with warnings as errors passed with 0 warnings and 0 errors; full Release suite passed 72/72.
+- Runtime verification outside the workspace sandbox created and flushed `%LOCALAPPDATA%\LexVerse\Logs\operational-metrics.jsonl` with content-free startup/shutdown events. Latest startup was 1,848.2 ms with 117.1 MiB working set; telemetry measured 1,749.4 ms from OS process start to the post-show event. The 5-second hard budget and 3-second target both passed on that run, though earlier cold runs reached about 4 seconds, so startup-target stability remains an optimization item.
+- Git caveat: all production work remains uncommitted on `feature/pipeline-integration`; `.codegraph/` remains an unrelated untracked index directory.
+- Next recommended production work: add a consent/settings surface and signed-offline entitlement adapter, then perform a signed Beta install/update/rollback rehearsal on clean Windows VMs.
+
+### 2026-07-20 Signed Paid Entitlements And Offline Fail-Closed Access
+
+- Replaced the bootstrap provider that granted Popup, Region, and Full screen with an explicit free-tier wrapper that grants only `translation.popup`. Paid capabilities now fail closed when verified claims are unavailable.
+- Added a strict ES256 entitlement verifier: P-256/SHA-256 with fixed 64-byte IEEE-P1363 signatures, pinned public keys selected by `keyId`, exact-payload-byte verification, subject binding, two-minute clock skew, 72-hour maximum lifetime, strict JSON fields, bounded envelope/grant sizes, and grant expiry clamping.
+- Added the HTTPS remote entitlement provider with an eight-second deadline covering headers and streamed content, a 256 KiB response limit, caller-cancellation preservation, and generic failure surfaces. A verified online response remains usable if local persistence fails.
+- Added a bounded signed-envelope file cache under `%LOCALAPPDATA%\LexVerse\Entitlements`. It stores the exact envelope with same-directory temporary-file replacement and re-verifies signature, identity, key, and time before every offline use; unsigned or expired data never grants access.
+- Added environment-based composition for endpoint, subject, key ID, and public-key PEM. Missing/invalid deployment configuration leaves the app operational in free mode instead of causing startup failure. The private signing key remains a backend-only concern.
+- Updated Control Center to resolve paid feature access on load, independently lock Region and Full screen, and show `UPGRADE` when neither capability is available. Runtime feature gates remain authoritative behind the visual state.
+- Added `docs/ENTITLEMENT_PROTOCOL.md` with the wire schema, cryptographic rules, cache behavior, deployment configuration, key rotation, and backend authority requirements.
+- Added six security-focused tests using real generated P-256 keys: valid signing and expiry clamping, tampering/subject/expiry rejection, unknown-key and lifetime rejection, exact signed-cache offline fallback, tampered-cache rejection, and free/paid isolation.
+- Verification: Release build passed with 0 warnings and 0 errors; full Release suite passed 78/78.
+- Runtime verification: the unconfigured free-mode app produced a responsive Control Center in 2,792.2 ms with 117.2 MiB working set, meeting the 3,000 ms target, 5,000 ms hard limit, and 250 MiB memory budget, then closed cleanly.
+- Caveat: the production identity/authentication service, purchase restore/checkout, authoritative entitlement issuer, public-key rotation deployment, and customer upgrade/account UX are not implemented yet.
+- Next recommended production work: implement authenticated account/session and catalog/checkout/restore flows, then add consent/settings/accessibility and rehearse a signed Beta release on clean VMs.
+
+### 2026-07-20 OAuth Account, Remote Plans, Checkout And Restore
+
+- Added platform-neutral account and commerce contracts plus `CommerceCoordinator`. It serializes initialization/sign-in/checkout/restore/sign-out, exposes explicit UI states, validates checkout against the current public catalog, refreshes entitlements after account changes, and retains a signed-in session even when entitlement refresh is temporarily unavailable.
+- Added immediate, generation-guarded feature-cache invalidation. Sign-out can no longer leave a previously cached paid grant usable until the normal five-minute refresh boundary, and an entitlement request already in flight cannot write the old account's grant back after sign-out.
+- Added OAuth Authorization Code + PKCE S256 for a public Windows native client. Sign-in uses the system browser, a random ephemeral `127.0.0.1` callback, 256-bit verifier/state, exact callback path, constant-time state validation, bounded headers, three-minute deadline, standard snake-case token responses, and refresh-token rotation support. No desktop client secret is accepted or sent.
+- Added current-user Windows DPAPI storage for access/refresh tokens and the minimal cached account profile, with bounded reads, plaintext buffer zeroing, same-directory atomic replacement, write-through flush, and deletion on sign-out.
+- Added bounded HTTPS adapters for the remotely adjustable plan/offer catalog and commerce backend. Checkout sends bearer auth, a fresh idempotency key, and only authoritative `offerId`; restore is an authenticated idempotent reconciliation call. Hosted checkout URLs are bounded HTTPS URLs without embedded credentials.
+- Bound entitlement requests to the OAuth session's server-derived subject and bearer token. Offline fallback may use the cached opaque subject, but the ES256 envelope must still match it; account switching therefore cannot reuse another subject's signed grant.
+- Added an Account & plan card to Control Center with free-mode/signed-out/signed-in/error states, public offer browsing, secure browser sign-in/checkout, restore/refresh, sign-out, independent locked Region/Full screen controls, and scrolling at smaller window heights.
+- Added `docs/ACCOUNT_COMMERCE.md` with endpoint schemas, environment configuration, PKCE/DPAPI behavior, backend authority, horizontal-scale guidance, and release tests. Updated entitlement and production architecture documentation for account-bound access.
+- Account and commerce operations now link to component lifetime cancellation. Closing the app cancels a pending browser/loopback sign-in instead of leaving a three-minute background operation racing disposed composition resources.
+- Added eight focused tests covering signed-out catalog UX state, authoritative known-offer checkout, immediate sign-out invalidation, remote price/period mapping, real loopback PKCE plus DPAPI ciphertext, bearer/idempotency/no-client-price checkout, direct entitlement cache invalidation, the in-flight refresh/sign-out race, and shutdown cancellation during browser sign-in.
+- Verification: Release warnings-as-errors build passed with 0 warnings and 0 errors; full Release suite passed 86/86.
+- Runtime verification: unconfigured free mode remained responsive in 2,606.1 ms with 122.1 MiB working set, meeting the 3-second target, 5-second hard limit, and 250 MiB memory budget, then closed cleanly.
+- Visual QA caveat: `PrintWindow` returned a black frame because the Control Center intentionally uses `WDA_EXCLUDEFROMCAPTURE`; this preserves self-capture/privacy protection. XAML structure was inspected and runtime startup passed, but a human foreground visual check is still recommended for the new scrollable account card.
+- External prerequisites: real OAuth registration/service, payment-provider catalog/checkout/webhooks, restore reconciliation, entitlement issuer/key rotation, and end-to-end sandbox payment tests are not present in this repository and remain required before public launch.
+- Next recommended production work: add consent/privacy/settings and accessibility automation, then implement release promotion/attestation and rehearse signed Beta install/update/rollback/account purchase flows on clean VMs.
+
+### 2026-07-20 Privacy Consent And Accessibility Baseline
+
+- Added versioned privacy preferences with privacy-safe defaults: external text processing is off until explicitly confirmed, while bounded content-free local diagnostics can be independently disabled. Settings are strictly parsed, size-bounded, atomically persisted, and fall back safely when invalid.
+- Wrapped the single production translator with `ConsentCheckingTextTranslator`. Popup and every realtime/batch mode now share an enforcement point immediately before provider invocation, so entitlement or a new UI route cannot bypass consent.
+- Added `ConsentAwareOperationalTelemetry`; toggling local diagnostics takes effect on the next event without restart. Existing crash redaction and telemetry schema restrictions remain unchanged.
+- Added Control Center privacy controls with a clear external-processing confirmation, immediate realtime stop on revocation, consent-aware Popup/Region/Full screen states, and user-safe recovery text.
+- Added an accessibility baseline: UI Automation names/help text, polite live status, keyboard access keys, visible keyboard-focus borders, non-color-only state labels, natural tab navigation, and scrolling for the account/privacy column at the supported minimum height.
+- Added `docs/PRIVACY_SETTINGS.md` and updated the telemetry/privacy and production architecture documents.
+- Added three tests proving all batch translation calls are blocked before the provider until consent, local telemetry drops immediately when disabled, and privacy-safe defaults plus versioned persistence round-trip correctly.
+- Verification: Release warnings-as-errors build passed with 0 warnings and 0 errors; full Release suite passed 89/89.
+- Runtime caveat: the post-privacy WPF startup recheck could not run because the execution environment rejected further outside-sandbox usage after its quota was reached. The immediately preceding account UI build passed the same startup gate at 2,606.1 ms/122.1 MiB, and the current XAML compiles, but a fresh runtime/accessibility pass remains required.
+- Visual caveat: capture protection prevents automated screenshots of the production window. Perform a human Narrator, keyboard-only, 200% DPI, High Contrast, minimum-size scrolling, consent-dialog focus, and revocation-during-realtime pass on the clean Beta VM.
+- Next recommended production work: prepare release promotion/attestation and run a signed Beta install/update/rollback/account/checkout/consent rehearsal on clean Windows VMs with the real HTTPS services and signing identity.
+
+### 2026-07-20 Signed Release Candidate And Beta Rehearsal Gate
+
+- Added `.github/workflows/release-candidate.yml`, a manual candidate workflow that requires the source commit to be reachable from `main`, repeats Release build/tests/startup/dependency audit, and serializes releases per channel without canceling an in-progress signing run.
+- Split validation from the protected signing job. `lexverse-beta`/`lexverse-stable` environment approval gates access to base64 PFX/password secrets; the certificate is imported non-exportable into the ephemeral current-user store and removed with the temporary PFX in an `always()` cleanup step.
+- Hardened `package-msix.ps1` so production signing now requires exactly one matching certificate, accessible private key, current validity, exact X.500 publisher-subject bytes, and Code Signing EKU when EKUs are present, in addition to the existing SHA-256 timestamp/signature verification.
+- Added `test-signed-release-candidate.ps1` to independently require expected artifacts, minimum package size, matching SHA-256, valid Authenticode signer and timestamp, exact publisher, channel/package/App Installer versions, exact HTTPS channel URIs, and no retained staging directory.
+- Signed candidates now receive immutable commit/workflow/hash metadata and a GitHub `actions/attest@v4` SLSA provenance attestation plus offline Sigstore bundle before `actions/upload-artifact@v7` retention. The workflow deliberately does not replace the live customer App Installer pointer.
+- Expanded `packaging/README.md` with protected-environment setup, signing-secret handling, attestation verification, and candidate/publish separation. Added `packaging/BETA_REHEARSAL.md` with artifact, install, privacy, account, sandbox checkout, signed-offline entitlement, accessibility, update, rollback, repair, uninstall, and evidence gates.
+- Verification: both PowerShell release scripts parse successfully; release workflow YAML parses successfully; HTTPS, mandatory-signing, and unknown-certificate identity guards passed locally without creating release output.
+- External caveat: no real signing certificate, protected GitHub environment secrets, HTTPS release host, payment/identity services, or clean VM were available, so the signed workflow and rehearsal remain unexecuted external gates rather than claimed passes.
+- Next recommended production work: configure `lexverse-beta`, run the signed candidate workflow with sandbox services, execute `BETA_REHEARSAL.md` on clean VMs, fix all findings, then promote by uploading versioned artifacts first and the App Installer pointer last.
+
+## Latest Scope Decision
+
+### 2026-07-20 Production MVP Scope Correction
+
+- Narrowed the launch product to two free workflows: Popup/F6 (including Quick text) and Document-region translation.
+- Added `MvpProductPolicy` as the single tested free-feature matrix. Popup, Region, and Document mode no longer depend on account/payment configuration; Full screen and specialized processing modes remain deferred.
+- Simplified the production Control Center to a single Document translation action. Full screen and Comic/Subtitle/Game selectors are hidden from the MVP experience.
+- Account/plan UI is hidden when commerce is unconfigured. Existing commerce and signed-entitlement extension points remain dormant for future validation instead of becoming MVP launch dependencies.
+- Kept privacy consent, local diagnostics controls, packaging/update, crash safety, accessibility, and performance gates because they directly affect a dependable customer MVP.
+- The authoritative in/out list and clean-VM acceptance criteria are in `docs/MVP_PRODUCTION_SCOPE.md`.
+- Verification: Release warnings-as-errors build passed with 0 warnings and 0 errors; the full Release suite passed 90/90, including the new exact MVP feature-matrix test.
 
 ## Next Recommended Work
 

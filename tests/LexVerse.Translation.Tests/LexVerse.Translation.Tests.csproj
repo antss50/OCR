@@ -15,6 +15,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\LexVerse.Application\LexVerse.Application.csproj" />
+    <ProjectReference Include="..\..\src\LexVerse.Core\LexVerse.Core.csproj" />
     <ProjectReference Include="..\..\src\LexVerse.Infrastructure\LexVerse.Infrastructure.csproj" />
   </ItemGroup>
 

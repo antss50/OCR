@@ -1,0 +1,70 @@
+<Window x:Class="LexVerse.App.TranslationPopupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        SizeToContent="WidthAndHeight"
+        Width="520"
+        Opacity="0"
+        Loaded="Window_Loaded">
+    <Border x:Name="PopupShell"
+            MinWidth="440"
+            MaxWidth="620"
+            Background="#F416191F"
+            BorderBrush="#343A46"
+            BorderThickness="1"
+            CornerRadius="14">
+        <StackPanel>
+            <Grid Background="#11141A" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="18,12">
+                    <TextBlock Text="LexVerse" Foreground="#F5F7FA" FontWeight="SemiBold"/>
+                    <TextBlock Text="Popup translation" Foreground="#8F99A8" FontSize="11"/>
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Content="&#xE711;"
+                        FontFamily="Segoe MDL2 Assets"
+                        Foreground="#E8ECF2"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Width="42"
+                        Cursor="Hand"
+                        Click="Close_Click"/>
+            </Grid>
+
+            <StackPanel x:Name="LoadingPanel" Margin="20">
+                <TextBlock Text="Translating…" Foreground="#D5DAE2" FontSize="14"/>
+                <TextBlock Text="This usually takes only a moment." Foreground="#8F99A8" FontSize="12" Margin="0,4,0,12"/>
+                <ProgressBar Height="4" IsIndeterminate="True" Foreground="#F2B84B" Background="#252A33" BorderThickness="0"/>
+            </StackPanel>
+
+            <StackPanel x:Name="ResultPanel" Visibility="Collapsed" Margin="20,16,20,20">
+                <TextBlock x:Name="SourceLabel" Text="Original" Foreground="#8F99A8" FontSize="11" FontWeight="SemiBold"/>
+                <TextBlock x:Name="SourceTextBlock" Foreground="#D9DEE7" TextWrapping="Wrap" MaxHeight="120" Margin="0,7,0,16"/>
+                <TextBlock x:Name="TargetLabel" Text="Translation" Foreground="#F2B84B" FontSize="11" FontWeight="SemiBold"/>
+                <TextBlock x:Name="TranslatedTextBlock" Foreground="#F7F8FA" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" LineHeight="25" Margin="0,7,0,16"/>
+                <Button x:Name="CopyButton"
+                        Content="Copy translation"
+                        HorizontalAlignment="Left"
+                        Padding="12,7"
+                        Background="#252A33"
+                        Foreground="#F5F7FA"
+                        BorderBrush="#343A46"
+                        Cursor="Hand"
+                        Click="Copy_Click"/>
+            </StackPanel>
+
+            <StackPanel x:Name="ErrorPanel" Visibility="Collapsed" Margin="20,16,20,20">
+                <TextBlock x:Name="ErrorTitle" Foreground="#FFB6B6" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock x:Name="ErrorMessage" Foreground="#C4CAD4" TextWrapping="Wrap" LineHeight="21" Margin="0,7,0,0"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>
