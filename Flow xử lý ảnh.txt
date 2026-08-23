@@ -1,0 +1,5 @@
+Flow xử lý ảnh:
++ Đối với ảnh Hợp đồng: Cần lấy thông tin phần BÊN B với các label nhận diện và nội dung (bên phải của label): Cộng Tác Viên (Họ và Tên), Địa chỉ, Điện thoại, Số CCCD/CC, Tài khoản ngân hang số (STK), Ngân hang (Tên NH), Chi nhánh, Thuộc Nhà Thuốc; phần Số:...ID...; phần Mẫu (góc trên phải): ví dụ như Mẫu 2026 - S; phần tổng tiền: label Mức phí tối đa nhà thuốc nhận được (gồm thuế thu nhập cá nhân nếu có) và nội dung của label (Số tiền)
++ Đối với ảnh CCCD (mặt trước): Cần lấy thông tin: Số/No. (Số CCCD), Họ và tên / Full name
++ Đôi với ảnh CCCD (mặt sau): Cần lấy thông tin: Ngày cấp/Date, month, year, Nơi cấp (Nằm phía dưới ngày cấp)
++ Đối vơi ảnh màn hình chuyển khoản: Cần lấy thông tin: Tên Ngân hàng, Số tài khoản người nhận, Tên người nhận. Ở mục này layout sẽ không có format nhất định
